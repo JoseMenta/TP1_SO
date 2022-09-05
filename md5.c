@@ -176,6 +176,8 @@ int main(int arg_c, char** arg_v){
                     perror("Error: Al imprimir el hasheo");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                 }
+                read_fd[i] = dup(read_fd[i]);
+                fclose(read_file);
 //                getchar();
                 // Un archivo menos para hashear
                 arch_already_hashed++;
@@ -199,14 +201,18 @@ int main(int arg_c, char** arg_v){
                 aux[len+1] = '\0';
                 size_t curr = 0;
                 printf("%s", aux);
-                while(curr<len){
+                long remaining = len+2; //len+1 porque no debemos escribir el \0, porque del otro lado el getline no lo saca
+                //Entonces lleva a que en la proxima lectura lo que vea es el string vacio
+                //TODO: Hay 2 maneras de arreglarlo: esta o hacer el getchar en slave, sabiendo que tiene que sacar el \n
+                while(remaining>0){
                     //Quiero que se quede bloqueado hasta que termine de escribir
-                    ssize_t written = write(write_fd[i],aux+curr,len+2);
+                    ssize_t written = write(write_fd[i],aux+curr,remaining);
                     if(written==-1){
                         perror("Error: Al intentar escribir el argumento");
                         //TODO: Manejar el cierre
                     }
                     curr+=written;
+                    remaining-=written;
                 }
                 index++;
 

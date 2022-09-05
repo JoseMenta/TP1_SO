@@ -25,7 +25,11 @@ int main(int arg_c, char ** arg_v){
     // Almacena la cantidad de caracteres leidos
     ssize_t line_length;
     while((line_length=getline(&line,&len,stdin))>0){
-//        fprintf(stderr,"El proceso %d Recibe el argumento %s\n",getpid(),line);
+//        fprintf(stderr,"El proceso %d Recibe el argumento %d y %d",getpid(),line[0],line[1]);
+//        if(line[1]==0){
+//            fprintf(stderr,"Error, llego un %c como argumento\n",line[0]);
+//            continue;
+//        }
         // PROCEDIMIENTO
         // Hacer un proceso que se pise con md5sum (/usr/bin) pero le cambio la salida estandar a un pipe para leerlo
         // Leo del pipe el resultado
@@ -198,7 +202,8 @@ int main(int arg_c, char ** arg_v){
                 //free(md5_result);
             }
         }
-        getchar();
+        //Si pasan el \0 en el string, debo hacer esto
+//        fprintf(stderr,"el caracter que queda es %d \n",getchar());
 
     }
     //Liberar los recursos
