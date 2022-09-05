@@ -1,0 +1,9 @@
+CMakeLists.txt
+.idea/
+cmake-build-debug/
+*.out
+tests/*
+prueba.c
+hola
+md5
+slave
