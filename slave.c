@@ -2,8 +2,9 @@
 // Created by Jose Menta on 04/09/2022.
 //
 
+// glibc version: 2.19
 // feature_test_macro para getline
-#define _GNU_SOURCE
+#define _POSIX_C_SOURCE >= 200809L
 
 
 #include <stdio.h>

@@ -2,8 +2,9 @@
 // Created by Jose Menta on 04/09/2022.
 //
 
-// feature_test_macro para fdopen y getline
-#define _GNU_SOURCE
+// glibc version: 2.19
+// feature_test_macro para getline y fdopen
+#define _POSIX_C_SOURCE >= 200809L
 
 #include <unistd.h>
 #include <stdio.h>
