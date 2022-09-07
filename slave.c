@@ -41,7 +41,7 @@ int main(int arg_c, char ** arg_v){
         int md5sum_pipe[2];
         // Si falla el pipe, se avisa y aborta
         if(pipe(md5sum_pipe) == -1){
-            perror("Error: Creación del pipe para md5sum");
+            perror("ERROR - Creación del pipe para md5sum - Slave");
             exit(1);
         }
 
@@ -54,7 +54,7 @@ int main(int arg_c, char ** arg_v){
             case -1: {
                 // Si tuvimos un error al intentar crear el proceso para el md5sum, se avisa y aborta
                 free(line);
-                perror("Error: Creacion del procesos para correr md5sum");
+                perror("ERROR - Creacion del procesos para correr md5sum - Slave");
                 exit(1);
             }
             case 0: {
@@ -63,7 +63,7 @@ int main(int arg_c, char ** arg_v){
                 // Cerramos el extremo de lectura del pipe
                 if(close(md5sum_pipe[0]) == -1){
                     free(line);
-                    perror("Error: Al cerrar el extremo de lectura del pipe en md5sum");
+                    perror("ERROR - Al cerrar el extremo de lectura del pipe en md5sum - Slave");
                     exit(1);
                 }
                 /*
@@ -74,13 +74,13 @@ int main(int arg_c, char ** arg_v){
                 // Llevamos el extremo de escritura del pipe a STDOUT
                 if(dup2(md5sum_pipe[1],STDOUT_FILENO) == -1){
                     free(line);
-                    perror("Error: Al copiar el extremo de escritura del pipe en stdout de md5sum");
+                    perror("ERROR - Al copiar el extremo de escritura del pipe en stdout de md5sum - Slave");
                     exit(1);
                 }
                 // Cerramos el extremo de escritura del pipe
                 if(close(md5sum_pipe[1]) == -1){
                     free(line);
-                    perror("Error: Al cerrar el extremo de escritura del pipe en md5sum");
+                    perror("ERROR - Al cerrar el extremo de escritura del pipe en md5sum - Slave");
                     exit(1);
                 }
                 // Definimos un arreglo de 3 strings para los argumentos de md5sum
@@ -106,7 +106,7 @@ int main(int arg_c, char ** arg_v){
                 args[2] = NULL; // Indica el final de argumentos
                 // Si hubo error al crear md5sum, se alerta y aborta
                 if(execv("/usr/bin/md5sum",args) == -1) {//Preguntar por const char** aca
-                    perror("Error: no fue posible ejecutar el programa md5sum");
+                    perror("ERROR - no fue posible ejecutar el programa md5sum - Slave");
                     exit(1); //con esto, termina el proceso del md5sum con error
                     //TODO: preguntar si este debe liberar recursos o los tiene que liberar el padre
                     //Pregunta seria: malloc duplica lo que tenia el padre en el hijo?
@@ -117,7 +117,7 @@ int main(int arg_c, char ** arg_v){
                 // Cerramos el extremo de escritura del pipe pues solo lee
                 if(close(md5sum_pipe[1]) == -1){
                     free(line);
-                    perror("Error: Al cerrar el extremo de escritura del pipe en Slave");
+                    perror("ERROR - Al cerrar el extremo de escritura del pipe - Slave");
                     exit(1);
                 }
 
@@ -154,7 +154,7 @@ int main(int arg_c, char ** arg_v){
                     // Si ocurre un error de lectura, se avisa y aborta
                     if(count == -1){
                         free(line);
-                        perror("Error: Al recibir el resultado de md5sum");
+                        perror("ERROR - Al recibir el resultado de md5sum - Slave");
                         exit(1);
                     }
                     remaining-=count;
@@ -170,7 +170,7 @@ int main(int arg_c, char ** arg_v){
                     free(line);
                     //fclose(md5_file);
                     //free(md5_result);
-                    perror("Error: Al cerrar el extremo de lectura del pipe en Slave");
+                    perror("ERROR - Al cerrar el extremo de lectura del pipe - Slave");
                     exit(1);
                 }
                 // Esperamos a que termina de ejecutarse el proceso md5sum
@@ -180,7 +180,7 @@ int main(int arg_c, char ** arg_v){
                     free(line);
                     //fclose(md5_file);
                     //free(md5_result);
-                    perror("Error: Fallo waitpid()");
+                    perror("ERROR - Fallo waitpid() - Slave");
                     exit(1);
                 }
                 // Si el proceso md5sum falla, se alerta y aborta
@@ -188,16 +188,16 @@ int main(int arg_c, char ** arg_v){
                     free(line);
                     //fclose(md5_file);
                     //free(md5_result);
-                    perror("Error: Al finalizar el proceso md5sum");
+                    perror("ERROR - Al finalizar el proceso md5sum - Slave");
                     exit(1);
                 }
                 // Enviamos por salida estandar (en realidad, lo obtiene el master) el resultado del md5sum
                 // TODO: Dejarlo para despues, tenemos que decidir como se hace
-                if(printf("%s;%s;%d\n",line,md5_result,getpid()) < 0){
+                if(printf("%s,%s,%d\n",line,md5_result,getpid()) < 0){
                     free(line);
                     //fclose(md5_file);
                     //free(md5_result);
-                    perror("Error: Fallo printf()");
+                    perror("ERROR - Fallo printf() - Slave");
                     exit(1);
                 }
                 //fclose(md5_file);

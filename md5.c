@@ -2,8 +2,9 @@
 // Created by Jose Menta on 04/09/2022.
 //
 
-// feature_test_macro para getline y fdopen
+// feature_test_macro para getline, fdopen y ftruncate
 #define _GNU_SOURCE
+#define _BSD_SOURCE
 
 #include <unistd.h>
 #include <stdio.h>
@@ -14,19 +15,115 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <semaphore.h>
 
 #define SLAVES 5
+#define SHM_NAME "/shm"
+#define READ_SEM "/read_semaphore"
+#define SHM_ELEMENT_SIZE 128
+#define SHM_SIZE(elements) (sizeof(char) * SHM_ELEMENT_SIZE * elements + 1)
+#define SLEEP_TIME 2
+
+typedef struct {
+    int index;
+    sem_t* semaphore;
+    char* start;
+} shm_struct;
 
 int write_to_slave(int fd, const char * file_path);
 int is_file(const char * file_path);
+int shm_write(const char* str,shm_struct* shm);
 
 int main(int arg_c, char** arg_v){
     // Recibe por argumentos los nombres de los archivos que se desean procesar
     // Si no recibe ninguno, finaliza
     if(arg_c <= 1){
-        perror("Error: No se recibieron archivos");
+        perror("ERROR - No se recibieron archivos - Master");
+        // TODO: Manejo de errores
         exit(1);
     }
+
+
+    // Creamos el archivo
+    FILE * resultado_file;
+    // Si falla, abortamos
+    if((resultado_file = fopen("./resultado.csv", "w+")) == NULL){
+        perror("ERROR - No se pudo abrir archivo resultado - Master");
+        // TODO: Manejo de errores
+        exit(1);
+    }
+    //TODO: liberar a resultado_file
+
+    // Creacion de share memory con driver
+    char * shared_memory = SHM_NAME;
+    int shared_memory_fd = shm_open(shared_memory, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+
+    // Si falla la creacion, abortamos
+    if(shared_memory_fd == -1){
+        perror("ERROR - Creacion de shm - Master");
+        //TODO: revisar los close de flies
+        exit(1);
+    }
+
+    // Asignamos el espacio para la shm
+    // Si falla, abortamos
+    if(ftruncate(shared_memory_fd, SHM_SIZE(arg_c-1)) == -1){
+        perror("ERROR - Falló la asignacion de tamaño en la shared memory - Master");
+        // TODO: Revisar los close
+        exit(1);
+    }
+
+    // Mapeamos la shared memory init
+    // Si falla, abortamos
+    void * shared_memory_map = mmap(NULL, SHM_SIZE(arg_c-1), PROT_WRITE, MAP_SHARED, shared_memory_fd, 0);
+    if(shared_memory_map == MAP_FAILED){
+        perror("ERROR - Mapeando la shared memory init - Master");
+        if(close(shared_memory_fd) == -1){
+            perror("ERROR - Cerrando el fd de la shared memory init - Master");
+        }
+        // TODO: Manejo de error
+        exit(1);
+    }
+
+    // TODO: Liberar la shm
+
+    //Crea el semaforo para sincronizar la lectura y escritura entre md5 y vista
+    sem_t * read_sem = sem_open(READ_SEM,O_RDWR|O_CREAT|O_EXCL,S_IRWXU,0);
+    // Si la creacion fallo, abortamos
+    if(read_sem==SEM_FAILED){
+        perror("ERROR - Al abrir el semaforo para lectura - Master");
+    }
+
+    // Imprimimos por pantalla el nombre identificador de la shm, el tamaño del mismo y el nombre del semafor
+    // Si falla, abortamos
+    if(printf("%s\n", SHM_NAME) < 0){
+        perror("ERROR - Al escribir por pantalla - Master");
+        // TODO: Manejo de errores
+        exit(1);
+    }
+
+    if(printf("%lu\n", SHM_SIZE(arg_c-1)) < 0){
+        perror("ERROR - Al escribir por pantalla - Master");
+        // TODO: Manejo de errores
+        exit(1);
+    }
+
+    if(printf("%s\n", READ_SEM) < 0){
+        perror("ERROR - Al escribir por pantalla - Master");
+        // TODO: Manejo de errores
+        exit(1);
+    }
+
+    sleep(SLEEP_TIME);
+
+    // Definimos la estructura de la shared memory con la informacion necesaria
+    shm_struct shm;
+    shm.index = 0;
+    shm.semaphore = read_sem;
+    shm.start = (char*) shared_memory_map;
+
 
     //TODO: sacar, es para desarrollo
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -44,11 +141,11 @@ int main(int arg_c, char** arg_v){
         int mtos_pipe[2]; //Va de Master a Slave
         int stom_pipe[2]; //Va de Slave a Master
         if(pipe(mtos_pipe) == -1){
-            perror("Error: Al crear el pipe de Master a Slave");
+            perror("ERROR - Al crear el pipe de Master a Slave - Master");
             // TODO: Manejar el cierre de archivos, pipes y mallocs
         }
         if(pipe(stom_pipe) == -1){
-            perror("Error: Al crear el pipe de Slave a Master");
+            perror("ERROR - Al crear el pipe de Slave a Master - Master");
             // TODO: Manejar el cierre de archivos, pipes y mallocs
         }
 
@@ -58,7 +155,7 @@ int main(int arg_c, char** arg_v){
             // En caso de error, abortamos
             case -1:
             {
-                perror("Error: Creación del proceso Slave");
+                perror("ERROR - Creación del proceso Slave - Master");
                 // TODO: Manejar el cierre de archivos, pipes y mallocs
             }
             // El proceso hijo se convierte en el proceso slave
@@ -66,37 +163,37 @@ int main(int arg_c, char** arg_v){
             {
                 //Cerramos el extremo de escritura del pipe mtos
                 if(close(mtos_pipe[1])== -1){
-                    perror("Error: Cerrar el extremo de escritura del pipe mtos en Slave");
+                    perror("ERROR - Cerrar el extremo de escritura del pipe mtos en Slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                 }
                 //Cerramos el extremo de lectura del pipe stom
                 if(close(stom_pipe[0])== -1){
-                    perror("Error: Cerrar el extremo de lectura del pipe stom en Slave");
+                    perror("ERROR - Cerrar el extremo de lectura del pipe stom en Slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                 }
                 // Llevamos a STDIN el extremo de lectura de mtos
                 if(dup2(mtos_pipe[0], STDIN_FILENO)== -1){
-                    perror("Error: duplicar STDIN_FILENO en lectura del pipe mtos en Slave");
+                    perror("ERROR - Duplicar STDIN_FILENO en lectura del pipe mtos en Slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                 }
                 // Llevamos a STDOUT el extremo de escritura de stom
                 if(dup2(stom_pipe[1], STDOUT_FILENO)== -1){
-                    perror("Error: duplicar STDOUT en escritura del pipe stom en Slave");
+                    perror("ERROR - Duplicar STDOUT en escritura del pipe stom en Slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                 }
                 // Cerramos el extremo de lectura del pipe mtos
                 if(close(mtos_pipe[0])== -1){
-                    perror("Error: Cerrar el extremo de lectura del pipe mtos en Slave");
+                    perror("ERROR - Cerrar el extremo de lectura del pipe mtos en Slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                 }
                 // Cerramos el extremo de escritura del pipe stom
                 if(close(stom_pipe[1])== -1){
-                    perror("Error: Cerrar el extremo de escritura del pipe stom en Slave");
+                    perror("ERROR: Cerrar el extremo de escritura del pipe stom en Slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                 }
                 // Ejecutamos el proceso slave
                 if(execl("slave", "./slave", NULL)==-1){
-                    perror("Error: Al crear el proceso slave");
+                    perror("ERROR: Al crear el proceso slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                     exit(1);
                 }
@@ -106,12 +203,12 @@ int main(int arg_c, char** arg_v){
             {
                 // Cerramos el extremo de escritura del pipe stom
                 if(close(stom_pipe[1])==-1){
-                    perror("Error: Cerrar el extremo de escritura del pipe stom en Master");
+                    perror("ERROR: Cerrar el extremo de escritura del pipe stom en Master - Master");
                     //TODO: Manejar cierre
                 }
                 // Cerramos el extremo de lectura del pipe mtos
                 if(close(mtos_pipe[0])==-1){
-                    perror("Error: Cerrar el extremo de lectura del pipe mtos en Master");
+                    perror("ERROR: Cerrar el extremo de lectura del pipe mtos en Master - Master");
                 }
                 // Almacenamos los pipes de lectura y escritura para el master
                 read_fd[i] = stom_pipe[0];
@@ -134,9 +231,9 @@ int main(int arg_c, char** arg_v){
     for(int i = 0; i<SLAVES && arg_index<arg_c;i++){
         // Primero hay que comprobar que el path a pasar sea un archivo y queden archivos disponibles para hashear
         int status = 0;
-//        if(!is_file(arg_v
         while(arg_index<arg_c && (status = is_file(arg_v[arg_index])) == 0){
-            count_arch--; //Para no considerarlos luego
+            // Dado que es un directorio, no debe considerarse como archivo
+            count_arch--;
             arg_index++;
         }
         // Error en lectura de stat
@@ -172,7 +269,7 @@ int main(int arg_c, char** arg_v){
         // Un solo select con sets de lectura para saber cuando se retorna el md5
         // los file descriptors disponibles para leer/escribir
         if(select(max_fd+1, &read_fd_set,  NULL, NULL, NULL) == -1){
-            perror("Error: Al realizar select()");
+            perror("ERROR - Al realizar select() - Master");
             // TODO: Manejar el cierre de archivos, pipes y mallocs
         }
         // Repaso todos los fd de lectura para saber cuales se pueden leer (tienen un archivo hasheado)
@@ -182,7 +279,7 @@ int main(int arg_c, char** arg_v){
                 // Primero creo un FILE * para poder leer hasta \n
                 FILE * read_file = fdopen(read_fd[i], "r");
                 if(read_file == NULL){
-                    perror("Error: Al intentar abrir el fd read");
+                    perror("ERROR - Al intentar abrir el fd read - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                     exit(1);
                 }
@@ -191,7 +288,7 @@ int main(int arg_c, char** arg_v){
                 // Lectura del fd hasta \n (printf termina en \n)
                 if(getline(&arch_hash, &arch_hash_len, read_file) == -1) {
                     //fclose(read_file);
-                    perror("Error: Al leer del slave");
+                    perror("ERROR - Al leer del slave - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                     exit(1);
                 }
@@ -203,6 +300,7 @@ int main(int arg_c, char** arg_v){
                 int status = 0;
                 while(arg_index<arg_c && (status = is_file(arg_v[arg_index])) == 0){
                     arg_index++;
+                    // Dado que es un directorio, no debe considerarse como archivo
                     count_arch--;
                 }
                 // Error en lectura de stat
@@ -218,13 +316,21 @@ int main(int arg_c, char** arg_v){
                     }
                     arg_index++;
                 }
+
                 // Imprimo el hasheo del archivo recibido
-                if(printf("%s", arch_hash) < 0){
-                    // fclose(read_file);
-                    perror("Error: Al imprimir el hasheo");
+                //if(printf("%s", arch_hash) < 0){
+                if(fprintf(resultado_file,"%s", arch_hash) < 0){
+                    perror("ERROR - Al imprimir el hasheo - Master");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
                     exit(1);
                 }
+                // Escribo dentro de shm con funcion de driver
+                if(shm_write(arch_hash, &shm ) == -1){
+                    perror("ERROR - Al pasar el hash al shm - Master");
+                    // TODO: Manejar el cierre de archivos, pipes y mallocs
+                    exit(1);
+                }
+
                 // Una vez que leimos, movemos el fd del extremo de salida del pipe para poder cerrar el
                 // fd anterior y cerrarlo dado que hicimos fdopen
                 read_fd[i] = dup(read_fd[i]);
@@ -245,11 +351,11 @@ int main(int arg_c, char** arg_v){
     // Cerramos los pipes para enviar el EOF a los procesos slave y asi finalizan
     for(int i = 0; i < SLAVES; i++){
         if(close(read_fd[i]) == -1){
-            perror("Error: Al cerrar un fd de lectura");
+            perror("ERROR - Al cerrar un fd de lectura - Master");
             //TODO: Manejar el cierre
         }
         if(close(write_fd[i]) == -1){
-            perror("Error: Al cerrar un fd de escritura");
+            perror("ERROR - Al cerrar un fd de escritura - Master");
             //TODO: Manejar el cierre
         }
     }
@@ -257,16 +363,44 @@ int main(int arg_c, char** arg_v){
     for(int i=0; i<SLAVES; i++){
         int slave_status;
         if(wait(&slave_status) == -1){
-            perror("Error: Al esperar por un proceso slave");
+            perror("ERROR - Al esperar por un proceso slave - Master");
             //TODO: Manejar el cierre
             exit(1);
         }
         if(WIFEXITED(slave_status) && WEXITSTATUS(slave_status) != 0){
-            perror("Error: EL proceso slave no se cerro correctamente");
+            perror("ERROR - EL proceso slave no se cerro correctamente - Master");
             //TODO: Manejar el cierre
             exit(1);
         }
     }
+    //No es necesario este semaforo, pues puedo hacer unlink de la shm y recien la destruye cuando todos los que la tienen
+    //mapeada la eliminan
+    //sem_wait(vista_sem);//Si vista entro, esperamos a que termine de utilizar la shm antes de cerrarla
+    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+        perror("ERROR - Desmapeando la shared memory - Master");
+        if(close(shared_memory_fd) == -1){
+            perror("ERROR - Cerrando el fd de la shared memory - Master");
+        }
+        //TODO: revisar cierre
+        exit(1);
+    }
+    if(close(shared_memory_fd) == -1){
+        perror("ERROR - Cerrando el fd de la shared memory info - Master");
+        //TODO: revisar cierre
+        exit(1);
+    }
+    if(shm_unlink(SHM_NAME)==-1){
+        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+        //TODO: revisar exit
+        exit(1);
+    }
+    if(sem_close(read_sem)==-1){
+        perror("ERROR - Cerrando el semaforo - Master");
+    }
+    if(sem_unlink(READ_SEM)==-1){
+        perror("ERROR - Haciendo unlink del semaforo - Master");
+    }
+    //Cerramos la shm
     return 0;
 }
 
@@ -296,7 +430,7 @@ int write_to_slave(int fd, const char * file_path){
         //Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
         ssize_t written = write(fd, aux + curr, remaining);
         if (written == -1) {
-            perror("Error: Al intentar escribir el argumento");
+            perror("ERROR - Al intentar escribir el argumento - Master");
             return -1;
         }
         // Movemos el puntero de escritura al primer caracter del path que no se escribio en el pipe
@@ -319,9 +453,30 @@ int write_to_slave(int fd, const char * file_path){
 int is_file(const char * file_path){
     struct stat prop;
     if( stat(file_path, &prop) == -1){
-        perror("Error - En lectura de file_path");
+        perror("ERROR - En lectura de file_path - Master");
         return -1;
     }
     return S_ISREG(prop.st_mode);
 }
 
+// -------------------------------------------------------------------------------------------------------
+// shm_write: Escribe un string en la shm, sincronizando el semaforo con el padre
+// -------------------------------------------------------------------------------------------------------
+// Argumentos:
+//      str: El string a guardar en la shm
+//      shm: Estructura con la informacion de la shm
+// -------------------------------------------------------------------------------------------------------
+// Retorno:
+//      0 si no hubbo error, -1 si lo hubo
+// -------------------------------------------------------------------------------------------------------
+int shm_write(const char* str,shm_struct* shm){
+    for(int i = 0; str[i]!='\0';i++){
+        shm->start[(shm->index)++] = str[i];
+//        (shm->start)++;
+        if(sem_post(shm->semaphore)==-1){
+            perror("ERROR - Al realizar post en el semaforo - Master");
+            return -1;
+        }
+    }
+    return 0;
+}
