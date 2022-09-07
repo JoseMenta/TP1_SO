@@ -2,9 +2,8 @@
 // Created by Jose Menta on 04/09/2022.
 //
 
-// glibc version: 2.19
 // feature_test_macro para getline y fdopen
-#define _POSIX_C_SOURCE >= 200809L
+#define _GNU_SOURCE
 
 #include <unistd.h>
 #include <stdio.h>
@@ -14,24 +13,22 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+
 #define SLAVES 5
 
-/*
-typedef struct {
-    char * arch_path;
-    char * md5_hash;
-    int slave_pid;
-} arch_hash;*/
-
-
+int write_to_slave(int fd, const char * file_path);
+int is_file(const char * file_path);
 
 int main(int arg_c, char** arg_v){
-    // Recibe como argumentos a los nombres de los archivos que se desean procesar
+    // Recibe por argumentos los nombres de los archivos que se desean procesar
     // Si no recibe ninguno, finaliza
     if(arg_c <= 1){
         perror("Error: No se recibieron archivos");
         exit(1);
     }
+
+    //TODO: sacar, es para desarrollo
     setvbuf(stdout, NULL, _IONBF, 0);
 
     // Creamos un arreglo que almacene los fd que leen de slaves
@@ -58,11 +55,13 @@ int main(int arg_c, char** arg_v){
         // Creamos el proceso hijo Slave
         pid_t new_pid = fork();
         switch (new_pid) {
+            // En caso de error, abortamos
             case -1:
             {
                 perror("Error: Creación del proceso Slave");
                 // TODO: Manejar el cierre de archivos, pipes y mallocs
             }
+            // El proceso hijo se convierte en el proceso slave
             case 0:
             {
                 //Cerramos el extremo de escritura del pipe mtos
@@ -102,6 +101,7 @@ int main(int arg_c, char** arg_v){
                     exit(1);
                 }
             }
+            // EL proceso padre se queda con los fd requeridos
             default:
             {
                 // Cerramos el extremo de escritura del pipe stom
@@ -120,63 +120,113 @@ int main(int arg_c, char** arg_v){
         }
     }
 
-    // Creamos un conjunto de fd para los pipes de lectura
 
-
-    // Guarda la cantidad de archivos a hashear
+    // Guarda la cantidad de archivos a hashear (si aparece un directorio, es un archivo menos a hashear)
     int count_arch = arg_c - 1;
     // Indica la cantidad de archivos que faltan hashear
 //    int arch_to_hash_left = count_arch;
     // Indica la cantidad de archivos ya hasheados
     int arch_already_hashed = 0;
     // Indica el proximo archivo a hashear
-    int index = 1;
+    int arg_index = 1;
 
+    // Le asginamos un archivo a cada slave inicialmente
+    for(int i = 0; i<SLAVES && arg_index<arg_c;i++){
+        // Primero hay que comprobar que el path a pasar sea un archivo y queden archivos disponibles para hashear
+        int status = 0;
+//        if(!is_file(arg_v
+        while(arg_index<arg_c && (status = is_file(arg_v[arg_index])) == 0){
+            count_arch--; //Para no considerarlos luego
+            arg_index++;
+        }
+        // Error en lectura de stat
+        if(status==-1){
+            //TODO: Manejar el cierre del programa
+            exit(1);
+        }
+        // Se obtuvo un archivo o ya no quedan paths por leer
+        if(arg_index<arg_c) {
+            if(write_to_slave(write_fd[i], arg_v[arg_index]) == -1){
+                // TODO: Manejar el cierre de archivos, fd, etc
+                exit(1);
+            }
+            arg_index++;
+        }
+    }
     // Iremos enviando el path de los archivos a hashear y leyendo los hasheos
     while(arch_already_hashed < count_arch){
-        // Configuramos los conjuntos con los elementos de lectura y escritura a analizar
+        // Configuramos los conjuntos con los elementos de lectura
         fd_set read_fd_set;
         FD_ZERO(&read_fd_set);
         // Creamos un conjunto de fd para los pipes de escritura
-        fd_set write_fd_set;
-        FD_ZERO(&write_fd_set);
-        int max = 0;
+        //fd_set write_fd_set;
+        //FD_ZERO(&write_fd_set);
+        int max_fd = 0;
+        //Obtenemos el maximo fd, para usar con select
         for(int i = 0; i < SLAVES; i++){
-            max = (read_fd[i]>max)?read_fd[i]:max;
+            max_fd = (read_fd[i]>max_fd)?read_fd[i]:max_fd;
             FD_SET(read_fd[i], &read_fd_set);
-            max = (write_fd[i]>max)?write_fd[i]:max;
-            FD_SET(write_fd[i], &write_fd_set);
+            //max = (write_fd[i]>max)?write_fd[i]:max;
+            //FD_SET(write_fd[i], &write_fd_set);
         }
-        // Un solo select con sets de lectura y escritura retorna en los sets
+        // Un solo select con sets de lectura para saber cuando se retorna el md5
         // los file descriptors disponibles para leer/escribir
-        if(select(max+1, &read_fd_set, &write_fd_set, NULL, NULL) == -1){
+        if(select(max_fd+1, &read_fd_set,  NULL, NULL, NULL) == -1){
             perror("Error: Al realizar select()");
             // TODO: Manejar el cierre de archivos, pipes y mallocs
         }
-        // Repaso todos los fd de lectura para saber cuales se pueden leer
-        for(int i = 0; i<SLAVES; i++){
-            if(FD_ISSET(read_fd[i],&read_fd_set)){
+        // Repaso todos los fd de lectura para saber cuales se pueden leer (tienen un archivo hasheado)
+        for(int i = 0; i<SLAVES ; i++){
+            if(FD_ISSET(read_fd[i], &read_fd_set)){
                 // Si esta disponible este fd para leer, leo el hash md5 obtenido
                 // Primero creo un FILE * para poder leer hasta \n
                 FILE * read_file = fdopen(read_fd[i], "r");
                 if(read_file == NULL){
                     perror("Error: Al intentar abrir el fd read");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
+                    exit(1);
                 }
                 char * arch_hash = NULL;
                 size_t arch_hash_len = 0;
                 // Lectura del fd hasta \n (printf termina en \n)
-                if(getline(&arch_hash, &arch_hash_len, read_file) == -1){
+                if(getline(&arch_hash, &arch_hash_len, read_file) == -1) {
                     //fclose(read_file);
                     perror("Error: Al leer del slave");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
+                    exit(1);
+                }
+
+                // Dado que ya finalizo hasheando el archivo pasado anteriormente, podemos pasarle el proximo archivo disponible
+                // Escribimos al que nos devolvio el resultado
+
+                // Primero hay que comprobar que el path a pasar sea un archivo y queden archivos disponibles para hashear
+                int status = 0;
+                while(arg_index<arg_c && (status = is_file(arg_v[arg_index])) == 0){
+                    arg_index++;
+                    count_arch--;
+                }
+                // Error en lectura de stat
+                if(status==-1){
+                    //TODO: Manejar el cierre del programa
+                    exit(1);
+                }
+                // Se obtuvo un archivo o ya no quedan paths por leer
+                if(arg_index<arg_c) {
+                    if(write_to_slave(write_fd[i], arg_v[arg_index]) == -1){
+                        // TODO: Manejar el cierre de archivos, fd, etc
+                        exit(1);
+                    }
+                    arg_index++;
                 }
                 // Imprimo el hasheo del archivo recibido
                 if(printf("%s", arch_hash) < 0){
                     // fclose(read_file);
                     perror("Error: Al imprimir el hasheo");
                     // TODO: Manejar el cierre de archivos, pipes y mallocs
+                    exit(1);
                 }
+                // Una vez que leimos, movemos el fd del extremo de salida del pipe para poder cerrar el
+                // fd anterior y cerrarlo dado que hicimos fdopen
                 read_fd[i] = dup(read_fd[i]);
                 fclose(read_file);
 //                getchar();
@@ -184,43 +234,14 @@ int main(int arg_c, char** arg_v){
                 arch_already_hashed++;
                 // Liberamos los recursos para el string y para abrir el archivo
                 free(arch_hash);
-                // TODO: Ver como cerrar los FILE *
-                // fclose(read_file);
-            }
-        }
-        // Una vez que leimos aquellos fd que se podian, vamos a comprobar si podemos enviar nuevos archivos
-        // para hashear a los procesos slave
-        for(int i = 0; i<SLAVES && index<arg_c; i++){
-            // Si el fd esta listo para escribir, entonces le paso el proximo archivo a leer
-
-            if(FD_ISSET(write_fd[i],&write_fd_set)){
-                // Tengo que escribir el argumento completo al proceso slave
-                size_t len = strlen(arg_v[index]);
-                char aux[len+2];
-                strcpy(aux,arg_v[index]);
-                aux[len]='\n';
-                aux[len+1] = '\0';
-                size_t curr = 0;
-                printf("%s", aux);
-                long remaining = len+2; //len+1 porque no debemos escribir el \0, porque del otro lado el getline no lo saca
-                //Entonces lleva a que en la proxima lectura lo que vea es el string vacio
-                //TODO: Hay 2 maneras de arreglarlo: esta o hacer el getchar en slave, sabiendo que tiene que sacar el \n
-                while(remaining>0){
-                    //Quiero que se quede bloqueado hasta que termine de escribir
-                    ssize_t written = write(write_fd[i],aux+curr,remaining);
-                    if(written==-1){
-                        perror("Error: Al intentar escribir el argumento");
-                        //TODO: Manejar el cierre
-                    }
-                    curr+=written;
-                    remaining-=written;
-                }
-                index++;
-
             }
         }
     }
-
+    //TODO: solucionamos el problema de que si A se queda mucho tiempo con un md5, no recibe otro hasta terminar
+    //Esto es para darle trabajo a los que estan libres
+    //El problema es que si B termina muy rapido, va a quedarse bloqueado hasta que md5 le pase algo
+    //Seria mejor que B ya tenga trabajo
+    //Lo de arriba es lo que solucionamos y lo que dejamos de hacer con esta manera
     // Cerramos los pipes para enviar el EOF a los procesos slave y asi finalizan
     for(int i = 0; i < SLAVES; i++){
         if(close(read_fd[i]) == -1){
@@ -238,11 +259,69 @@ int main(int arg_c, char** arg_v){
         if(wait(&slave_status) == -1){
             perror("Error: Al esperar por un proceso slave");
             //TODO: Manejar el cierre
+            exit(1);
         }
         if(WIFEXITED(slave_status) && WEXITSTATUS(slave_status) != 0){
             perror("Error: EL proceso slave no se cerro correctamente");
             //TODO: Manejar el cierre
+            exit(1);
         }
     }
     return 0;
 }
+
+// -------------------------------------------------------------------------------------------------------
+// write_to_slave: Dado un fd y un path, escribe el path en dicho fd
+// -------------------------------------------------------------------------------------------------------
+// Argumentos:
+//      fd: El file descriptor a escribir
+//      file_path: El path del archivo
+// -------------------------------------------------------------------------------------------------------
+// Retorno:
+//      0 si no hubo error, -1 si lo hubo
+// -------------------------------------------------------------------------------------------------------
+int write_to_slave(int fd, const char * file_path){
+    size_t len = strlen(file_path);
+    char aux[len + 1];
+    strcpy(aux, file_path);
+    aux[len] = '\n';
+
+    // Indica la posicion del proximo caracter del path que se debe escribir en el pipe
+    size_t curr = 0;
+    // Indica la cantidad de caracteres que falta escribir por el pipe
+    size_t remaining = len + 1;
+
+    // Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
+    while (remaining > 0) {
+        //Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
+        ssize_t written = write(fd, aux + curr, remaining);
+        if (written == -1) {
+            perror("Error: Al intentar escribir el argumento");
+            return -1;
+        }
+        // Movemos el puntero de escritura al primer caracter del path que no se escribio en el pipe
+        curr += written;
+        // Actualizamos la cantidad de caracteres que faltan escribir
+        remaining -= written;
+    }
+    return 0;
+}
+
+// -------------------------------------------------------------------------------------------------------
+// is_file: Revisar si el path es un archivo
+// -------------------------------------------------------------------------------------------------------
+// Argumentos:
+//      file_path: El path del archivo
+// -------------------------------------------------------------------------------------------------------
+// Retorno:
+//      0 si no es un file, 1 si es file, -1 por error en stat
+// -------------------------------------------------------------------------------------------------------
+int is_file(const char * file_path){
+    struct stat prop;
+    if( stat(file_path, &prop) == -1){
+        perror("Error - En lectura de file_path");
+        return -1;
+    }
+    return S_ISREG(prop.st_mode);
+}
+

@@ -2,9 +2,8 @@
 // Created by Jose Menta on 04/09/2022.
 //
 
-// glibc version: 2.19
 // feature_test_macro para getline
-#define _POSIX_C_SOURCE >= 200809L
+#define _GNU_SOURCE
 
 
 #include <stdio.h>
@@ -18,7 +17,9 @@
 
 //proceso slave que recibe el archivo por stdin y retorna su md5 por stdout
 int main(int arg_c, char ** arg_v){
+    //TODO: sacar, es para desarrollo
     setvbuf(stdout, NULL, _IONBF, 0);
+
     // Leemos de stdin con getline
     size_t len=0;
     char* line = NULL;
