@@ -5,7 +5,7 @@
 // feature_test_macro para getline, fdopen y ftruncate
 #define _GNU_SOURCE
 #define _BSD_SOURCE
-#include "shmADT.h"
+//#include "shmADT.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,6 +25,7 @@
 #define SHM_ELEMENT_SIZE 128
 #define SHM_SIZE(elements) (sizeof(char) * SHM_ELEMENT_SIZE * elements + 1)
 #define SLEEP_TIME 15
+#define EOT 0x04
 
 typedef struct {
     int index;
@@ -1007,7 +1008,9 @@ int main(int arg_c, char** arg_v){
             }
         }
     }
-    if(shm_write("\0\n", &shm ) == -1){
+    //char final_str[2] = {EOT, '\n'};
+    char final_str[2] = {'\0', '\n'};
+    if(shm_write(final_str, &shm ) == -1){
         perror("ERROR - Al enviar el fin de transmision a la shm - Master");
         /// ------------------------------------------------------------
         if(fclose(resultado_file) == EOF){

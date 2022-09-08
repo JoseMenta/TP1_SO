@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <semaphore.h>
+#define EOT 0x04
 
 enum {ARGS = 0, STDIN = 1};
 
@@ -29,27 +30,31 @@ int main(int arg_c, char ** arg_v){
     // FORMATO: /<shared_memory_name>\n
     //          <shared_memory_size>\n
     //          /<sem_name>\n
-    char * shared_memory_name = NULL, * shared_memory_size = NULL, * sem_name = NULL;
+    char * shared_memory_name = NULL;
+    char * shared_memory_size = NULL;
+    char * sem_name = NULL;
     size_t shared_memory_name_len = 0, shared_memory_size_len = 0, sem_name_len = 0;
     int data_received = -1;
+    size_t len;
     switch (arg_c) {
         // Si no se pasa por argumento, se obtiene por entrada estandar
         case 1: {
             data_received = STDIN;
-            size_t len = 0;
-            if ((len = getline(&shared_memory_name, &shared_memory_name_len, stdin) == -1)) {
+            if ((len = getline(&shared_memory_name, &shared_memory_name_len, stdin)) == -1) {
                 perror("ERROR - Se esperaba recibir el nombre de la shared memory - View");
                 exit(1);
             }
             shared_memory_name[len-1]='\0';
-            printf("Al final hay un %d\n",shared_memory_name[len]);
-            if (getline(&shared_memory_size, &shared_memory_size_len, stdin) == -1) {
+
+            if ((len = getline(&shared_memory_size, &shared_memory_size_len, stdin)) == -1){
                 perror("ERROR - Se esperaba recibir el tamaño de la shared memory - View");
                 /// ------------------------------------------------------------
                 free(shared_memory_name);
                 /// ------------------------------------------------------------
                 exit(1);
             }
+            shared_memory_size[len-1]='\0';
+
             if ((len = getline(&sem_name, &sem_name_len, stdin)) == -1) {
                 perror("ERROR - Se esperaba recibir el nombre del semaforo - View");
                 /// ------------------------------------------------------------
@@ -75,7 +80,7 @@ int main(int arg_c, char ** arg_v){
     }
 
     // Se conecta al semaforo con el cual se va a trabajar en la shared memory
-    sem_t * shared_memory_sem = sem_open("/read_semaphore", O_RDWR);
+    sem_t * shared_memory_sem = sem_open(sem_name, O_RDWR);
     // Si la conexion falla, abortamos
     if(shared_memory_sem == SEM_FAILED){
         perror("Error - Al abrir el semaforo de la shm - View");
@@ -92,10 +97,8 @@ int main(int arg_c, char ** arg_v){
         free(sem_name);
     }
 
-    printf("%s",shared_memory_name);
-
     // Nos conectamos a la shared memory creado por el proceso master
-    int shared_memory_fd = shm_open("/shm", O_RDWR, 0);
+    int shared_memory_fd = shm_open(shared_memory_name, O_RDWR, 0);
     // Liberamos el espacio dedicado para reservar el nombre de la shared memory (en el caso de recibir por stdin)
     if(data_received == STDIN){
         free(shared_memory_name);
@@ -139,7 +142,7 @@ int main(int arg_c, char ** arg_v){
     }
 
     // Mapeamos la shared memory
-    void * shared_memory_map = mmap(NULL, 1000*sizeof(char), PROT_READ, MAP_SHARED, shared_memory_fd, 0);
+    void * shared_memory_map = mmap(NULL, shm_size, PROT_READ, MAP_SHARED, shared_memory_fd, 0);
     if(shared_memory_map == MAP_FAILED){
         perror("ERROR - Mapeando la shared memory - View");
         /// ------------------------------------------------------------
@@ -221,6 +224,7 @@ int shm_read(char* buff, shm_struct* shm){
 //        printf("Hay cosas todavia y leyo: %s",buff);
         return 0;
     }
+    //if(shm->start[shm->index]==EOT)
     if(shm->start[shm->index]=='\0'){
         buff[i] = '\0';
 //        printf("No hay mas cosas y leyo un %s",buff);
@@ -242,11 +246,9 @@ int read_shared_memory_info(shm_struct* shm){
     // Formato de la shared memory
     // <arch_1>,<md5_arch_1>,<slave_pid>\n<arch_2>,<md5_arch_2>,<slave_pid>\n...<arch_n>,<md5_arch_n>,<slave_pid>\n\0
     char shm_output[256];
-    char * llegue = "lectura ";
     int status;
     while((status = shm_read(shm_output, shm)) == 0){
-        printf("%s%d\n", llegue, status);
-        printf("mensaje:%s", shm_output);
+        printf("%s", shm_output);
     }
     if(status == -1){
         perror("ERROR - Leyendo de la shm - View");
