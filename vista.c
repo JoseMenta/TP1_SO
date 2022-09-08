@@ -14,6 +14,8 @@
 #include <string.h>
 #include <semaphore.h>
 
+enum {ARGS = 0, STDIN = 1};
+
 typedef struct {
     int index;
     sem_t* semaphore;
@@ -29,26 +31,31 @@ int main(int arg_c, char ** arg_v){
     //          /<sem_name>\n
     char * shared_memory_name = NULL, * shared_memory_size = NULL, * sem_name = NULL;
     size_t shared_memory_name_len = 0, shared_memory_size_len = 0, sem_name_len = 0;
-
+    int data_received = -1;
     switch (arg_c) {
         // Si no se pasa por argumento, se obtiene por entrada estandar
         case 1: {
+            data_received = STDIN;
             size_t len = 0;
             if ((len = getline(&shared_memory_name, &shared_memory_name_len, stdin) == -1)) {
-                perror("ERROR - Se esperaba recibir el nombre de la shared memory - Vista");
+                perror("ERROR - Se esperaba recibir el nombre de la shared memory - View");
                 exit(1);
             }
             shared_memory_name[len-1]='\0';
             printf("Al final hay un %d\n",shared_memory_name[len]);
             if (getline(&shared_memory_size, &shared_memory_size_len, stdin) == -1) {
-                perror("ERROR - Se esperaba recibir el tamaño de la shared memory - Vista");
+                perror("ERROR - Se esperaba recibir el tamaño de la shared memory - View");
+                /// ------------------------------------------------------------
                 free(shared_memory_name);
+                /// ------------------------------------------------------------
                 exit(1);
             }
             if ((len = getline(&sem_name, &sem_name_len, stdin)) == -1) {
-                perror("ERROR - Se esperaba recibir el nombre del semaforo - Vista");
+                perror("ERROR - Se esperaba recibir el nombre del semaforo - View");
+                /// ------------------------------------------------------------
                 free(shared_memory_name);
                 free(shared_memory_size);
+                /// ------------------------------------------------------------
                 exit(1);
             }
             sem_name[len-1]='\0';
@@ -56,35 +63,54 @@ int main(int arg_c, char ** arg_v){
         }
         // Si se paso por argumento, se toma el primero
         case 4:
+            data_received = ARGS;
             shared_memory_name = arg_v[1];
             shared_memory_size = arg_v[2];
             sem_name = arg_v[3];
             break;
         // En otro caso, se aborta
         default:
-            fprintf(stderr, "ERROR - Solo se espera recibir tres o ningún argumento - Vista\n");
+            fprintf(stderr, "ERROR - Solo se espera recibir tres o ningún argumento - View\n");
             exit(1);
     }
 
     // Se conecta al semaforo con el cual se va a trabajar en la shared memory
     sem_t * shared_memory_sem = sem_open("/read_semaphore", O_RDWR);
-    // Si la conexion fallo, abortamos
+    // Si la conexion falla, abortamos
     if(shared_memory_sem == SEM_FAILED){
-        perror("Error - Al abrir el semaforo de la shm - Vista");
-        free(shared_memory_name);
-        free(shared_memory_size);
+        perror("Error - Al abrir el semaforo de la shm - View");
+        /// ------------------------------------------------------------
+        if(data_received == STDIN){
+            free(shared_memory_name);
+            free(shared_memory_size);
+            free(sem_name);
+        }
+        /// ------------------------------------------------------------
         exit(1);
     }
-    free(sem_name);
+    if(data_received == STDIN){
+        free(sem_name);
+    }
+
     printf("%s",shared_memory_name);
+
     // Nos conectamos a la shared memory creado por el proceso master
     int shared_memory_fd = shm_open("/shm", O_RDWR, 0);
     // Liberamos el espacio dedicado para reservar el nombre de la shared memory (en el caso de recibir por stdin)
-    free(shared_memory_name);
+    if(data_received == STDIN){
+        free(shared_memory_name);
+    }
     // Si fallo la conexion, abortamos
     if(shared_memory_fd == -1){
-        free(shared_memory_size);
-        perror("ERROR - Conectando a la shared memory - Vista");
+        perror("ERROR - Conectando a la shared memory - View");
+        /// ------------------------------------------------------------
+        if(data_received == STDIN){
+            free(shared_memory_size);
+        }
+        if(sem_close(shared_memory_sem) == -1){
+            perror("ERROR - Cerrando el semaforo - View");
+        }
+        /// ------------------------------------------------------------
         exit(1);
     }
 
@@ -93,23 +119,37 @@ int main(int arg_c, char ** arg_v){
     size_t shm_size = strtoul(shared_memory_size, &endptr, 10);
     // Si fallo la conversion, aborta
     if(shared_memory_size == endptr){
-        perror("ERROR - Lectura del tamaño de shm por argumento - Vista");
-        free(shared_memory_size);
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory init - Vista");
+        perror("ERROR - Lectura del tamaño de shm por argumento - View");
+        /// ------------------------------------------------------------
+        if(data_received == STDIN){
+            free(shared_memory_size);
         }
+        if(sem_close(shared_memory_sem) == -1){
+            perror("ERROR - Cerrando el semaforo - View");
+        }
+        if(close(shared_memory_fd) == -1){
+            perror("ERROR - Cerrando el fd de la shared memory - View");
+        }
+        /// ------------------------------------------------------------
         exit(1);
     }
 
-    free(shared_memory_size);
+    if(data_received == STDIN){
+        free(shared_memory_size);
+    }
 
     // Mapeamos la shared memory
     void * shared_memory_map = mmap(NULL, 1000*sizeof(char), PROT_READ, MAP_SHARED, shared_memory_fd, 0);
     if(shared_memory_map == MAP_FAILED){
-        perror("ERROR - Mapeando la shared memory init - Vista");
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory init - Vista");
+        perror("ERROR - Mapeando la shared memory - View");
+        /// ------------------------------------------------------------
+        if(sem_close(shared_memory_sem) == -1){
+            perror("ERROR - Cerrando el semaforo - View");
         }
+        if(close(shared_memory_fd) == -1){
+            perror("ERROR - Cerrando el fd de la shared memory - View");
+        }
+        /// ------------------------------------------------------------
         exit(1);
     }
 
@@ -124,22 +164,33 @@ int main(int arg_c, char ** arg_v){
     // Desmapeamos la shared memory y cerramos su file descriptor
     // Si falla, abortamos
     if(munmap(shared_memory_map, shm_size) == -1){
-        perror("ERROR - Desmapeando la shared memory info - Vista");
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory info - Vista");
+        perror("ERROR - Desmapeando la shared memory - View");
+        /// ------------------------------------------------------------
+        if(sem_close(shared_memory_sem) == -1){
+            perror("ERROR - Cerrando el semaforo - View");
         }
+        if(close(shared_memory_fd) == -1){
+            perror("ERROR - Cerrando el fd de la shared memory - View");
+        }
+        /// ------------------------------------------------------------
         ret_value = -1;
     }
     if(close(shared_memory_fd) == -1){
-        perror("ERROR - Cerrando el fd de la shared memory info - Vista");
+        perror("ERROR - Cerrando el fd de la shared memory - View");
+        /// ------------------------------------------------------------
+        if(sem_close(shared_memory_sem) == -1){
+            perror("ERROR - Cerrando el semaforo - View");
+        }
+        /// ------------------------------------------------------------
         ret_value = -1;
     }
     if( sem_close(shared_memory_sem) == -1) {
-        perror("ERROR - Cerrando el semaforo de la shm - Vista");
+        perror("ERROR - Cerrando el semaforo de la shm - View");
         ret_value = -1;
     }
 
     // Finalizamos la ejecucion del proceso vista
+    // Si hubo algun error, retorna 1; si no, retorna 0
     exit(ret_value * -1);
 }
 
@@ -160,7 +211,7 @@ int shm_read(char* buff, shm_struct* shm){
         buff[i] = shm->start[shm->index];
     }
     if(status==-1){
-        perror("ERROR - Al realizar wait para el semaforo - Vista");
+        perror("ERROR - Al realizar wait para el semaforo - View");
         return -1;
     }
     if(shm->start[shm->index]=='\n'){
@@ -198,7 +249,7 @@ int read_shared_memory_info(shm_struct* shm){
         printf("mensaje:%s", shm_output);
     }
     if(status == -1){
-        perror("ERROR - Leyendo del shm - Vista");
+        perror("ERROR - Leyendo de la shm - View");
         return -1;
     }
     return 0;
