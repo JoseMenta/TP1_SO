@@ -9,7 +9,7 @@ compile:
 
 # Permite ejecutar en el formato con pipe
 # Primero se debe hace make compile y tener un directorio tests con los archivos que se desean analizar
-execute_piped: $(md5) $(vista) $(slave) $(tests)
+execute_piped:
 	@./md5 ./tests/* | ./vista
 
 # Borra ejecutables y los resultados
