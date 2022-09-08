@@ -104,7 +104,7 @@ int main(int arg_c, char ** arg_v){
     free(shared_memory_size);
 
     // Mapeamos la shared memory
-    void * shared_memory_map = mmap(NULL, shm_size, PROT_READ, MAP_SHARED, shared_memory_fd, 0);
+    void * shared_memory_map = mmap(NULL, 1000*sizeof(char), PROT_READ, MAP_SHARED, shared_memory_fd, 0);
     if(shared_memory_map == MAP_FAILED){
         perror("ERROR - Mapeando la shared memory init - Vista");
         if(close(shared_memory_fd) == -1){
@@ -163,13 +163,16 @@ int shm_read(char* buff, shm_struct* shm){
         perror("ERROR - Al realizar wait para el semaforo - Vista");
         return -1;
     }
-    if(shm->start[shm->index]!='\n'){
+    if(shm->start[shm->index]=='\n'){
+        (shm->index)++;
         buff[i] = '\n';
         buff[i+1] = '\0';
+//        printf("Hay cosas todavia y leyo: %s",buff);
         return 0;
     }
-    if(shm->start[shm->index]!='\0'){
+    if(shm->start[shm->index]=='\0'){
         buff[i] = '\0';
+//        printf("No hay mas cosas y leyo un %s",buff);
         return 1;
     }
     return 0;

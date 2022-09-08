@@ -343,6 +343,11 @@ int main(int arg_c, char** arg_v){
             }
         }
     }
+    if(shm_write("\0\n", &shm ) == -1){
+        perror("ERROR - Al pasar el hash al shm - Master");
+        // TODO: Manejar el cierre de archivos, pipes y mallocs
+        exit(1);
+    }
     //TODO: solucionamos el problema de que si A se queda mucho tiempo con un md5, no recibe otro hasta terminar
     //Esto es para darle trabajo a los que estan libres
     //El problema es que si B termina muy rapido, va a quedarse bloqueado hasta que md5 le pase algo
@@ -389,11 +394,11 @@ int main(int arg_c, char** arg_v){
         //TODO: revisar cierre
         exit(1);
     }
-    if(shm_unlink(SHM_NAME)==-1){
-        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        //TODO: revisar exit
-        exit(1);
-    }
+//    if(shm_unlink(SHM_NAME)==-1){
+//        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//        //TODO: revisar exit
+//        exit(1);
+//    }
     if(sem_close(read_sem)==-1){
         perror("ERROR - Cerrando el semaforo - Master");
     }
@@ -467,16 +472,21 @@ int is_file(const char * file_path){
 //      shm: Estructura con la informacion de la shm
 // -------------------------------------------------------------------------------------------------------
 // Retorno:
-//      0 si no hubbo error, -1 si lo hubo
+//      0 si no hubo error, -1 si lo hubo
 // -------------------------------------------------------------------------------------------------------
 int shm_write(const char* str,shm_struct* shm){
-    for(int i = 0; str[i]!='\0';i++){
-        shm->start[(shm->index)++] = str[i];
-        (shm->start)++;
+    for(int i = 0; str[i]!='\n';i++){
+//        shm->start[(shm->index)++] = str[i];
+        *((shm->start)++)=str[i];
         if(sem_post(shm->semaphore)==-1){
             perror("ERROR - Al realizar post en el semaforo - Master");
             return -1;
         }
+    }
+    *((shm->start)++) = '\n';
+    if(sem_post(shm->semaphore)==-1){
+        perror("ERROR - Al realizar post en el semaforo - Master");
+        return -1;
     }
     return 0;
 }
