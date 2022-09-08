@@ -5,7 +5,7 @@
 // feature_test_macro para getline, fdopen y ftruncate
 #define _GNU_SOURCE
 #define _BSD_SOURCE
-
+#include "shmADT.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
