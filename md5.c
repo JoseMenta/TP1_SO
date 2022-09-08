@@ -472,7 +472,7 @@ int is_file(const char * file_path){
 int shm_write(const char* str,shm_struct* shm){
     for(int i = 0; str[i]!='\0';i++){
         shm->start[(shm->index)++] = str[i];
-//        (shm->start)++;
+        (shm->start)++;
         if(sem_post(shm->semaphore)==-1){
             perror("ERROR - Al realizar post en el semaforo - Master");
             return -1;

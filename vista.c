@@ -188,9 +188,11 @@ int read_shared_memory_info(shm_struct* shm){
     // Formato de la shared memory
     // <arch_1>,<md5_arch_1>,<slave_pid>\n<arch_2>,<md5_arch_2>,<slave_pid>\n...<arch_n>,<md5_arch_n>,<slave_pid>\n\0
     char shm_output[256];
+    char * llegue = "lectura ";
     int status;
     while((status = shm_read(shm_output, shm)) == 0){
-        printf("%s", shm_output);
+        printf("%s%d\n", llegue, status);
+        printf("mensaje:%s", shm_output);
     }
     if(status == -1){
         perror("ERROR - Leyendo del shm - Vista");
