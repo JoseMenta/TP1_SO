@@ -1,18 +1,18 @@
-#TP N° 1 Sistemas Operativos
+# TP N° 1 Sistemas Operativos
 
 El trabajo práctico consiste en aprender a utilizar los distintos tipos de IPCs
 presentes en un sistema POSIX. Para ello se implementará un sistema que distribuirá el
 cómputo del md5 de múltiples archivos entre varios procesos.
 
-##Requerimientos previos
+## Requerimientos previos
 
 - Contar con una version de Docker nativa
 - Acceso a una terminal linux
 
-##Instructivo
+## Instructivo
 El siguiente sistema cuenta con dos versiones de ejecucion
 
-###Pipeline
+### Pipeline
 1. Ejecutar dentro del contenedor Docker
 ```sh
 $ make all
@@ -24,7 +24,7 @@ $ ./md5  [listado de archivos] | ./vista
 
 
 
-###Procesos en simunltaneo
+### Procesos en simunltaneo
 1. Abrir dos terminales
 
 3. Situarse dentro de un contenedor docker en cada una
