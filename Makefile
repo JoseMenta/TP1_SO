@@ -63,3 +63,7 @@ remove_smh_and_semaphore:
 delete: 
 	@rm -rf ./tests
 
+open_docker:
+	docker run -v "${PWD}:/root" --privileged -ti agodio/itba-so:1.0
+
+
