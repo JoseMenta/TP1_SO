@@ -275,8 +275,60 @@ int main(int arg_c, char ** arg_v){
                 //free(md5_result);
             }
         }
-        //Si pasan el \0 en el string, debo hacer esto
-//        fprintf(stderr,"el caracter que queda es %d \n",getchar());
+
+////---------------------------------------------------
+//        // Comando para popen
+//        char comand[100] = "/usr/bin/md5sum ";
+//        strcat(comand, line);
+//        //crea el pipe, fork y exec del comando => manejo de errores interno de popen
+//        FILE *fp = popen(comand, "r");
+//        if (fp == NULL){
+//            perror("ERROR - Fallo en popen - Slave");
+//            free(line);
+//            exit(1);
+//        }
+//
+//        //obtenemos el fd del popen
+//        int fd_md5sum = fileno(fp);
+//
+//        char md5_result[MD5SUM_SIZE+1];
+//        char * md5_result_offset = md5_result;
+//        size_t count;
+//        size_t remaining = MD5SUM_SIZE;
+//        //remaining>0 porque dice que puede llevar a errores si remaining es 0
+//        while(remaining > 0 && (count = read(fd_md5sum, md5_result_offset,remaining)) != 0){
+//            // Si ocurre un error de lectura, se avisa y aborta
+//            if(count == -1){
+//                perror("ERROR - Al recibir el resultado de md5sum - Slave");
+//                /// ------------------------------------------------------------
+//                free(line);
+//                if(close(md5sum_pipe[0]) == -1){
+//                    perror("ERROR - Al cerrar el extremo de lectura del pipe en md5sum - Slave");
+//                }
+//                /// ------------------------------------------------------------
+//                exit(1);
+//            }
+//            remaining-=count;
+//            // Va moviendo el offset para no ir pisando lo que ya se almaceno en md5_result
+//            md5_result_offset += count;
+//        }
+//
+//
+//        // Indicamos el fin de string del hash md5
+//        md5_result[32] = '\0';
+//
+//        // Cerramos el popen
+//        if(pclose(fp) == -1){
+//            perror("ERROR - Al cerrar el extremo de lectura del pipe - Slave");
+//            free(line);
+//            exit(1);
+//        }
+//        if(printf("%s,%s,%d\n",line,md5_result,getpid()) < 0){
+//            perror("ERROR - Fallo printf() - Slave");
+//            free(line);
+//            exit(1);
+//        }
+////---------------------------------------------------
 
     }
     if(errno != 0){

@@ -10,11 +10,15 @@ cómputo del md5 de múltiples archivos entre varios procesos.
 - Acceso a una terminal linux
 
 ## Instructivo
-Abrir una terminal y ejecutar el comando
+Descargar la imagen de docker
 ```sh
-make docker
+docker pull agodio/itba-so:1.0
 ```
-Esto abrira una imagen docker donde correra nuesto proyecto
+Ubicarse en el directorio donde se descargó el proyecto. Luego, abrir una terminal y ejecutar el comando
+```sh
+make open_docker
+```
+Esto abrira un contenedor docker donde correra nuesto proyecto
 
 Una vez dentro existen 2 maneras de ejecutar el proyecto
 ### Pipeline
@@ -43,7 +47,7 @@ make all
 ```
 
 Este comando arrojara 3 valores.
-Colocarlos en el comando en el mismo orden de impresion
+Colocarlos en el comando _vista_ en el mismo orden de impresion (esto debe realizarse dentro de los 15 segundos luego de ejecutar a _md5_)
 ```sh
 #A modo de ejemplo
 ./vista /shm 1200 /read_semaphore

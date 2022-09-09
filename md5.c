@@ -24,7 +24,7 @@
 #define READ_SEM "/read_semaphore"
 #define SHM_ELEMENT_SIZE 128
 #define SHM_SIZE(elements) (sizeof(char) * SHM_ELEMENT_SIZE * elements + 1)
-#define SLEEP_TIME 15
+#define SLEEP_TIME 2
 #define EOT 0x04
 
 typedef struct {
@@ -36,6 +36,10 @@ typedef struct {
 int write_to_slave(int fd, const char * file_path);
 int is_file(const char * file_path);
 int shm_write(const char* str,shm_struct* shm);
+//TODO: creo que no es necesario cerrar el fd, eso se va a cerrar solo cuando termine el proceso
+int close_shm_file_sem(void* shm,int shm_fd,int shm_length,sem_t* sem, FILE* file);
+int close_fd(int * fd, int length);
+
 
 int main(int arg_c, char** arg_v){
     // Recibe por argumentos los nombres de los archivos que se desean procesar
@@ -44,176 +48,6 @@ int main(int arg_c, char** arg_v){
         perror("ERROR - No se recibieron archivos - Master");
         exit(1);
     }
-
-
-    // Creamos el archivo
-    FILE * resultado_file;
-    // Si falla, abortamos
-    if((resultado_file = fopen("./resultado.csv", "w+")) == NULL){
-        perror("ERROR - No se pudo abrir archivo resultado - Master");
-        exit(1);
-    }
-
-    //TODO: liberar a resultado_file
-
-    // Creacion de share memory con driver
-    char * shared_memory = SHM_NAME;
-    int shared_memory_fd = shm_open(shared_memory, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-
-    // Si falla la creacion, abortamos
-    if(shared_memory_fd == -1){
-        perror("ERROR - Creacion de shm - Master");
-        /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        /// ------------------------------------------------------------
-        exit(1);
-    }
-
-    // Asignamos el espacio para la shm
-    // Si falla, abortamos
-    if(ftruncate(shared_memory_fd, SHM_SIZE(arg_c-1)) == -1){
-        perror("ERROR - Falló la asignacion de tamaño en la shared memory - Master");
-        /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
-        /// ------------------------------------------------------------
-        exit(1);
-    }
-
-    // Mapeamos la shared memory init
-    // Si falla, abortamos
-    void * shared_memory_map = mmap(NULL, SHM_SIZE(arg_c-1), PROT_WRITE, MAP_SHARED, shared_memory_fd, 0);
-    if(shared_memory_map == MAP_FAILED){
-        perror("ERROR - Mapeando la shared memory init - Master");
-        /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
-        /// ------------------------------------------------------------
-        exit(1);
-    }
-
-    // TODO: Liberar la shm
-
-    //Crea el semaforo para sincronizar la lectura y escritura entre md5 y vista
-    sem_t * read_sem = sem_open(READ_SEM,O_RDWR|O_CREAT|O_EXCL,S_IRWXU,0);
-    // Si la creacion fallo, abortamos
-    if(read_sem==SEM_FAILED){
-        perror("ERROR - Al abrir el semaforo para lectura - Master");
-        /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-            perror("ERROR - Desmapeando la shared memory - Master");
-        }
-        if(shm_unlink(SHM_NAME)==-1){
-            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
-        /// ------------------------------------------------------------
-        exit(1);
-    }
-
-    // Imprimimos por pantalla el nombre identificador de la shm, el tamaño del mismo y el nombre del semafor
-    // Si falla, abortamos
-    if(printf("%s\n", SHM_NAME) < 0){
-        perror("ERROR - Al escribir por pantalla - Master");
-        /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_close(read_sem)==-1){
-            perror("ERROR - Cerrando el semaforo - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
-        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-            perror("ERROR - Desmapeando la shared memory - Master");
-        }
-        if(shm_unlink(SHM_NAME)==-1){
-            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
-        /// ------------------------------------------------------------
-        exit(1);
-    }
-
-    if(printf("%lu\n", SHM_SIZE(arg_c-1)) < 0){
-        perror("ERROR - Al escribir por pantalla - Master");
-        /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_close(read_sem)==-1){
-            perror("ERROR - Cerrando el semaforo - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
-        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-            perror("ERROR - Desmapeando la shared memory - Master");
-        }
-        if(shm_unlink(SHM_NAME)==-1){
-            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
-        /// ------------------------------------------------------------
-        exit(1);
-    }
-
-    if(printf("%s\n", READ_SEM) < 0){
-        perror("ERROR - Al escribir por pantalla - Master");
-        /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_close(read_sem)==-1){
-            perror("ERROR - Cerrando el semaforo - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
-        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-            perror("ERROR - Desmapeando la shared memory - Master");
-        }
-        if(shm_unlink(SHM_NAME)==-1){
-            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
-        /// ------------------------------------------------------------
-        exit(1);
-    }
-
-    sleep(SLEEP_TIME);
-
-    // Definimos la estructura de la shared memory con la informacion necesaria
-    shm_struct shm;
-    shm.index = 0;
-    shm.semaphore = read_sem;
-    shm.start = (char*) shared_memory_map;
-
-
-    //TODO: sacar, es para desarrollo
-    setvbuf(stdout, NULL, _IONBF, 0);
 
     // Creamos un arreglo que almacene los fd que leen de slaves
     int read_fd[SLAVES];
@@ -230,70 +64,40 @@ int main(int arg_c, char** arg_v){
         if(pipe(mtos_pipe) == -1){
             perror("ERROR - Al crear el pipe de Master a Slave - Master");
             /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
-            for(int j = 0; j < i; j++){
-                if(close(read_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de lectura - Master");
-                }
-                if(close(write_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de escritura - Master");
-                }
-            }
+            close_fd(read_fd, i);
+            close_fd(write_fd, i);
+            //TODO: creo que esto no es necesario, ya el exit se encarga
+//            for(int j = 0; j < i; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
             /// ------------------------------------------------------------
             exit(1);
         }
         if(pipe(stom_pipe) == -1){
             perror("ERROR - Al crear el pipe de Slave a Master - Master");
             /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
-            for(int j = 0; j < i; j++){
-                if(close(read_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de lectura - Master");
-                }
-                if(close(write_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de escritura - Master");
-                }
-            }
-            if(close(mtos_pipe[0]) == -1){
-                perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
-            }
-            if(close(mtos_pipe[1]) == -1){
-                perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
-            }
+            close_fd(read_fd, i);
+            close_fd(write_fd, i);
+            close_fd(mtos_pipe, 2);
+//            for(int j = 0; j < i; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
+//            if(close(mtos_pipe[0]) == -1){
+//                perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
+//            }
+//            if(close(mtos_pipe[1]) == -1){
+//                perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
+//            }
             /// ------------------------------------------------------------
             exit(1);
         }
@@ -306,96 +110,65 @@ int main(int arg_c, char** arg_v){
             {
                 perror("ERROR - Creación del proceso Slave - Master");
                 /// ------------------------------------------------------------
-                if(fclose(resultado_file) == EOF){
-                    perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                }
-                if(sem_close(read_sem)==-1){
-                    perror("ERROR - Cerrando el semaforo - Master");
-                }
-                if(sem_unlink(READ_SEM)==-1){
-                    perror("ERROR - Haciendo unlink del semaforo - Master");
-                }
-                if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                    perror("ERROR - Desmapeando la shared memory - Master");
-                }
-                if(shm_unlink(SHM_NAME)==-1){
-                    perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                }
-                if(close(shared_memory_fd) == -1){
-                    perror("ERROR - Cerrando el fd de la shared memory - Master");
-                }
-                for(int j = 0; j < i; j++){
-                    if(close(read_fd[j]) == -1){
-                        perror("ERROR - Al cerrar un fd de lectura - Master");
-                    }
-                    if(close(write_fd[j]) == -1){
-                        perror("ERROR - Al cerrar un fd de escritura - Master");
-                    }
-                }
-                if(close(mtos_pipe[0]) == -1){
-                    perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
-                }
-                if(close(mtos_pipe[1]) == -1){
-                    perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
-                }
-                if(close(stom_pipe[0]) == -1){
-                    perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
-                }
-                if(close(stom_pipe[1]) == -1){
-                    perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
-                }
+                close_fd(read_fd, i);
+                close_fd(write_fd, i);
+                close_fd(mtos_pipe, 2);
+                close_fd(stom_pipe, 2);
+//                for(int j = 0; j < i; j++){
+//                    if(close(read_fd[j]) == -1){
+//                        perror("ERROR - Al cerrar un fd de lectura - Master");
+//                    }
+//                    if(close(write_fd[j]) == -1){
+//                        perror("ERROR - Al cerrar un fd de escritura - Master");
+//                    }
+//                }
+//                if(close(mtos_pipe[0]) == -1){
+//                    perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
+//                }
+//                if(close(mtos_pipe[1]) == -1){
+//                    perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
+//                }
+//                if(close(stom_pipe[0]) == -1){
+//                    perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
+//                }
+//                if(close(stom_pipe[1]) == -1){
+//                    perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
+//                }
                 /// ------------------------------------------------------------
                 exit(1);
             }
             // El proceso hijo se convierte en el proceso slave
             case 0:
             {
-                // TODO: Mover la creacion de slaves al principio para no tener que realizar todo este manejo de cierre
-                /// ------------------------------------------------------------
-                int error = 0;
-                if(fclose(resultado_file) == EOF){
-                    perror("ERROR - Cerrando el archivo resultado.csv - Slave");
-                    error = 1;
-                }
-                if(sem_close(read_sem)==-1){
-                    perror("ERROR - Cerrando el semaforo - Slave");
-                    error = 1;
-                }
-                if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                    perror("ERROR - Desmapeando la shared memory - Slave");
-                    error = 1;
-                }
-                if(close(shared_memory_fd) == -1){
-                    perror("ERROR - Cerrando el fd de la shared memory - Slave");
-                    error = 1;
-                }
-                for(int j = 0; j < i; j++){
-                    if(close(read_fd[j]) == -1){
-                        perror("ERROR - Al cerrar un fd de lectura - Slave");
-                        error = 1;
-                    }
-                    if(close(write_fd[j]) == -1){
-                        perror("ERROR - Al cerrar un fd de escritura - Slave");
-                        error = 1;
-                    }
-                }
-                if(error){
-                    exit(1);
-                }
+
+                close_fd(read_fd, i);
+                close_fd(write_fd, i);
+//                for(int j = 0; j < i; j++){
+//                    if(close(read_fd[j]) == -1){
+//                        perror("ERROR - Al cerrar un fd de lectura - Slave");
+////                        error = 1;
+//                    }
+//                    if(close(write_fd[j]) == -1){
+//                        perror("ERROR - Al cerrar un fd de escritura - Slave");
+////                        error = 1;
+//                    }
+//                }
                 /// ------------------------------------------------------------
                 //Cerramos el extremo de escritura del pipe mtos
                 if(close(mtos_pipe[1])== -1){
                     perror("ERROR - Cerrar el extremo de escritura del pipe mtos en Slave - Slave");
                     /// ------------------------------------------------------------
-                    if(close(mtos_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
-                    }
-                    if(close(stom_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
-                    }
-                    if(close(stom_pipe[1]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
-                    }
+                    close_fd(stom_pipe, 2);
+                    close_fd(mtos_pipe, 1);
+//                    if(close(mtos_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
+//                    }
+//                    if(close(stom_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
+//                    }
+//                    if(close(stom_pipe[1]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
+//                    }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -403,12 +176,14 @@ int main(int arg_c, char** arg_v){
                 if(close(stom_pipe[0])== -1){
                     perror("ERROR - Cerrar el extremo de lectura del pipe stom en Slave - Slave");
                     /// ------------------------------------------------------------
-                    if(close(mtos_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
-                    }
-                    if(close(stom_pipe[1]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
-                    }
+                    close_fd(&(stom_pipe[1]), 1);
+                    close_fd(mtos_pipe, 1);
+//                    if(close(mtos_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
+//                    }
+//                    if(close(stom_pipe[1]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
+//                    }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -416,12 +191,14 @@ int main(int arg_c, char** arg_v){
                 if(dup2(mtos_pipe[0], STDIN_FILENO)== -1){
                     perror("ERROR - Duplicar STDIN_FILENO en lectura del pipe mtos en Slave - Slave");
                     /// ------------------------------------------------------------
-                    if(close(mtos_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
-                    }
-                    if(close(stom_pipe[1]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
-                    }
+                    close_fd(&(stom_pipe[1]), 1);
+                    close_fd(mtos_pipe, 1);
+//                    if(close(mtos_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
+//                    }
+//                    if(close(stom_pipe[1]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
+//                    }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -429,12 +206,14 @@ int main(int arg_c, char** arg_v){
                 if(dup2(stom_pipe[1], STDOUT_FILENO)== -1){
                     perror("ERROR - Duplicar STDOUT en escritura del pipe stom en Slave - Slave");
                     /// ------------------------------------------------------------
-                    if(close(mtos_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
-                    }
-                    if(close(stom_pipe[1]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
-                    }
+                    close_fd(&(stom_pipe[1]), 1);
+                    close_fd(mtos_pipe, 1);
+//                    if(close(mtos_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
+//                    }
+//                    if(close(stom_pipe[1]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
+//                    }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -442,9 +221,13 @@ int main(int arg_c, char** arg_v){
                 if(close(mtos_pipe[0])== -1){
                     perror("ERROR - Cerrar el extremo de lectura del pipe mtos en Slave - Slave");
                     /// ------------------------------------------------------------
-                    if(close(stom_pipe[1]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
-                    }
+                    close_fd(&(stom_pipe[1]), 1);
+//                    if(close(mtos_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Slave - Slave");
+//                    }
+//                    if(close(stom_pipe[1]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Slave - Slave");
+//                    }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -466,41 +249,27 @@ int main(int arg_c, char** arg_v){
                 if(close(stom_pipe[1])==-1){
                     perror("ERROR: Cerrar el extremo de escritura del pipe stom en Master - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < i; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
-                    if(close(mtos_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
-                    }
-                    if(close(mtos_pipe[1]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
-                    }
-                    if(close(stom_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
-                    }
+                    close_fd(read_fd, i);
+                    close_fd(write_fd, i);
+                    close_fd(mtos_pipe, 2);
+                    close_fd(stom_pipe, 1);
+//                    for(int j = 0; j < i; j++){
+//                        if(close(read_fd[j]) == -1){
+//                            perror("ERROR - Al cerrar un fd de lectura - Master");
+//                        }
+//                        if(close(write_fd[j]) == -1){
+//                            perror("ERROR - Al cerrar un fd de escritura - Master");
+//                        }
+//                    }
+//                    if(close(mtos_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
+//                    }
+//                    if(close(mtos_pipe[1]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
+//                    }
+//                    if(close(stom_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
+//                    }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -508,38 +277,24 @@ int main(int arg_c, char** arg_v){
                 if(close(mtos_pipe[0])==-1){
                     perror("ERROR: Cerrar el extremo de lectura del pipe mtos en Master - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < i; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
-                    if(close(mtos_pipe[1]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
-                    }
-                    if(close(stom_pipe[0]) == -1){
-                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
-                    }
+                    close_fd(read_fd, i);
+                    close_fd(write_fd, i);
+                    close_fd(&(mtos_pipe[1]), 1);
+                    close_fd(stom_pipe, 1);
+//                    for(int j = 0; j < i; j++){
+//                        if(close(read_fd[j]) == -1){
+//                            perror("ERROR - Al cerrar un fd de lectura - Master");
+//                        }
+//                        if(close(write_fd[j]) == -1){
+//                            perror("ERROR - Al cerrar un fd de escritura - Master");
+//                        }
+//                    }
+//                    if(close(mtos_pipe[1]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe mtos en Master - Master");
+//                    }
+//                    if(close(stom_pipe[0]) == -1){
+//                        perror("ERROR - Al cerrar el extremo de lectura del pipe stom en Master - Master");
+//                    }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -549,6 +304,204 @@ int main(int arg_c, char** arg_v){
             }
         }
     }
+
+
+    // Creamos el archivo
+    FILE * resultado_file;
+    // Si falla, abortamos
+    if((resultado_file = fopen("./resultado.csv", "w+")) == NULL){
+        perror("ERROR - No se pudo abrir archivo resultado - Master");
+        /// ------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    //TODO: liberar a resultado_file
+
+    // Creacion de share memory con driver
+    char * shared_memory = SHM_NAME;
+    int shared_memory_fd = shm_open(shared_memory, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+
+    // Si falla la creacion, abortamos
+    if(shared_memory_fd == -1){
+        perror("ERROR - Creacion de shm - Master");
+        /// ------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(NULL, -1, 0, NULL, resultado_file);
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    // Asignamos el espacio para la shm
+    // Si falla, abortamos
+    if(ftruncate(shared_memory_fd, SHM_SIZE(arg_c-1)) == -1){
+        perror("ERROR - Falló la asignacion de tamaño en la shared memory - Master");
+        /// ------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(NULL, shared_memory_fd, 0, NULL, resultado_file);
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    // Mapeamos la shared memory init
+    // Si falla, abortamos
+    void * shared_memory_map = mmap(NULL, SHM_SIZE(arg_c-1), PROT_WRITE, MAP_SHARED, shared_memory_fd, 0);
+    if(shared_memory_map == MAP_FAILED){
+        perror("ERROR - Mapeando la shared memory init - Master");
+        /// ------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(NULL, shared_memory_fd, 0, NULL, resultado_file);
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    // TODO: Liberar la shm
+
+    //Crea el semaforo para sincronizar la lectura y escritura entre md5 y vista
+    sem_t * read_sem = sem_open(READ_SEM,O_RDWR|O_CREAT|O_EXCL,S_IRWXU,0);
+    // Si la creacion fallo, abortamos
+    if(read_sem==SEM_FAILED){
+        perror("ERROR - Al abrir el semaforo para lectura - Master");
+        /// ------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c-1), NULL, resultado_file);
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//            perror("ERROR - Desmapeando la shared memory - Master");
+//        }
+//        if(shm_unlink(SHM_NAME)==-1){
+//            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    // Imprimimos por pantalla el nombre identificador de la shm, el tamaño del mismo y el nombre del semafor
+    // Si falla, abortamos
+    if(printf("%s\n", SHM_NAME) < 0){
+        perror("ERROR - Al escribir por pantalla - Master");
+        ///------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c-1), read_sem, resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(sem_close(read_sem)==-1){
+//            perror("ERROR - Cerrando el semaforo - Master");
+//        }
+//        if(sem_unlink(READ_SEM)==-1){
+//            perror("ERROR - Haciendo unlink del semaforo - Master");
+//        }
+//        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//            perror("ERROR - Desmapeando la shared memory - Master");
+//        }
+//        if(shm_unlink(SHM_NAME)==-1){
+//            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    if(printf("%lu\n", SHM_SIZE(arg_c-1)) < 0){
+        perror("ERROR - Al escribir por pantalla - Master");
+        /// ------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c-1), read_sem, resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(sem_close(read_sem)==-1){
+//            perror("ERROR - Cerrando el semaforo - Master");
+//        }
+//        if(sem_unlink(READ_SEM)==-1){
+//            perror("ERROR - Haciendo unlink del semaforo - Master");
+//        }
+//        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//            perror("ERROR - Desmapeando la shared memory - Master");
+//        }
+//        if(shm_unlink(SHM_NAME)==-1){
+//            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    if(printf("%s\n", READ_SEM) < 0){
+        perror("ERROR - Al escribir por pantalla - Master");
+        /// ------------------------------------------------------------
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c-1), read_sem, resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(sem_close(read_sem)==-1){
+//            perror("ERROR - Cerrando el semaforo - Master");
+//        }
+//        if(sem_unlink(READ_SEM)==-1){
+//            perror("ERROR - Haciendo unlink del semaforo - Master");
+//        }
+//        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//            perror("ERROR - Desmapeando la shared memory - Master");
+//        }
+//        if(shm_unlink(SHM_NAME)==-1){
+//            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
+        /// ------------------------------------------------------------
+        exit(1);
+    }
+
+    sleep(SLEEP_TIME);
+
+    // Definimos la estructura de la shared memory con la informacion necesaria
+    shm_struct shm;
+    shm.index = 0;
+    shm.semaphore = read_sem;
+    shm.start = (char*) shared_memory_map;
+
+
+    //TODO: sacar, es para desarrollo
+    setvbuf(stdout, NULL, _IONBF, 0);
 
 
     // Guarda la cantidad de archivos a hashear (si aparece un directorio, es un archivo menos a hashear)
@@ -573,32 +526,35 @@ int main(int arg_c, char** arg_v){
         if(status==-1){
             perror("ERROR - Revisando si el path recibido es un archivo - Master");
             /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
-            for(int j = 0; j < SLAVES; j++){
-                if(close(read_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de lectura - Master");
-                }
-                if(close(write_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de escritura - Master");
-                }
-            }
+            close_fd(read_fd, SLAVES);
+            close_fd(write_fd, SLAVES);
+            close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
             /// ------------------------------------------------------------
             exit(1);
         }
@@ -607,32 +563,35 @@ int main(int arg_c, char** arg_v){
             if(write_to_slave(write_fd[i], arg_v[arg_index]) == -1){
                 perror("ERROR - Enviando el path al proceso esclavo");
                 /// ------------------------------------------------------------
-                if(fclose(resultado_file) == EOF){
-                    perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                }
-                if(sem_close(read_sem)==-1){
-                    perror("ERROR - Cerrando el semaforo - Master");
-                }
-                if(sem_unlink(READ_SEM)==-1){
-                    perror("ERROR - Haciendo unlink del semaforo - Master");
-                }
-                if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                    perror("ERROR - Desmapeando la shared memory - Master");
-                }
-                if(shm_unlink(SHM_NAME)==-1){
-                    perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                }
-                if(close(shared_memory_fd) == -1){
-                    perror("ERROR - Cerrando el fd de la shared memory - Master");
-                }
-                for(int j = 0; j < SLAVES; j++){
-                    if(close(read_fd[j]) == -1){
-                        perror("ERROR - Al cerrar un fd de lectura - Master");
-                    }
-                    if(close(write_fd[j]) == -1){
-                        perror("ERROR - Al cerrar un fd de escritura - Master");
-                    }
-                }
+                close_fd(read_fd, SLAVES);
+                close_fd(write_fd, SLAVES);
+                close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                 /// ------------------------------------------------------------
                 exit(1);
             }
@@ -660,32 +619,35 @@ int main(int arg_c, char** arg_v){
         if(select(max_fd+1, &read_fd_set,  NULL, NULL, NULL) == -1){
             perror("ERROR - Al realizar select() - Master");
             /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
-            for(int j = 0; j < SLAVES; j++){
-                if(close(read_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de lectura - Master");
-                }
-                if(close(write_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de escritura - Master");
-                }
-            }
+            close_fd(read_fd, SLAVES);
+            close_fd(write_fd, SLAVES);
+            close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
             /// ------------------------------------------------------------
             exit(1);
         }
@@ -698,32 +660,35 @@ int main(int arg_c, char** arg_v){
                 if(read_file == NULL){
                     perror("ERROR - Al intentar abrir el fd read - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < SLAVES; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
+                    close_fd(read_fd, SLAVES);
+                    close_fd(write_fd, SLAVES);
+                    close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -733,32 +698,35 @@ int main(int arg_c, char** arg_v){
                 if(getline(&arch_hash, &arch_hash_len, read_file) == -1) {
                     perror("ERROR - Al leer del slave - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < SLAVES; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
+                    close_fd(read_fd, SLAVES);
+                    close_fd(write_fd, SLAVES);
+                    close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
                     }
@@ -780,32 +748,35 @@ int main(int arg_c, char** arg_v){
                 if(status==-1){
                     perror("ERROR - Revisando si el path recibido es un archivo - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < SLAVES; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
+                    close_fd(read_fd, SLAVES);
+                    close_fd(write_fd, SLAVES);
+                    close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
                     }
@@ -818,32 +789,35 @@ int main(int arg_c, char** arg_v){
                     if(write_to_slave(write_fd[i], arg_v[arg_index]) == -1){
                         perror("ERROR - Enviando el path al proceso esclavo");
                         /// ------------------------------------------------------------
-                        if(fclose(resultado_file) == EOF){
-                            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                        }
-                        if(sem_close(read_sem)==-1){
-                            perror("ERROR - Cerrando el semaforo - Master");
-                        }
-                        if(sem_unlink(READ_SEM)==-1){
-                            perror("ERROR - Haciendo unlink del semaforo - Master");
-                        }
-                        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                            perror("ERROR - Desmapeando la shared memory - Master");
-                        }
-                        if(shm_unlink(SHM_NAME)==-1){
-                            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                        }
-                        if(close(shared_memory_fd) == -1){
-                            perror("ERROR - Cerrando el fd de la shared memory - Master");
-                        }
-                        for(int j = 0; j < SLAVES; j++){
-                            if(close(read_fd[j]) == -1){
-                                perror("ERROR - Al cerrar un fd de lectura - Master");
-                            }
-                            if(close(write_fd[j]) == -1){
-                                perror("ERROR - Al cerrar un fd de escritura - Master");
-                            }
-                        }
+                        close_fd(read_fd, SLAVES);
+                        close_fd(write_fd, SLAVES);
+                        close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                         if(fclose(read_file) == EOF){
                             perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
                         }
@@ -859,32 +833,35 @@ int main(int arg_c, char** arg_v){
                 if(fprintf(resultado_file,"%s", arch_hash) < 0){
                     perror("ERROR - Al escribir el hasheo en resultados.csv - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < SLAVES; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
+                    close_fd(read_fd, SLAVES);
+                    close_fd(write_fd, SLAVES);
+                    close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
                     }
@@ -896,32 +873,35 @@ int main(int arg_c, char** arg_v){
                 if(shm_write(arch_hash, &shm ) == -1){
                     perror("ERROR - Al guardar el hash en la shm - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < SLAVES; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
+                    close_fd(read_fd, SLAVES);
+                    close_fd(write_fd, SLAVES);
+                    close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
                     }
@@ -938,32 +918,35 @@ int main(int arg_c, char** arg_v){
                 if(read_fd[i] == -1){
                     perror("ERROR - Al mover el fd de lectura - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < SLAVES; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
+                    close_fd(read_fd, SLAVES);
+                    close_fd(write_fd, SLAVES);
+                    close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
                     }
@@ -973,32 +956,35 @@ int main(int arg_c, char** arg_v){
                 if(fclose(read_file) == EOF){
                     perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
                     /// ------------------------------------------------------------
-                    if(fclose(resultado_file) == EOF){
-                        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-                    }
-                    if(sem_close(read_sem)==-1){
-                        perror("ERROR - Cerrando el semaforo - Master");
-                    }
-                    if(sem_unlink(READ_SEM)==-1){
-                        perror("ERROR - Haciendo unlink del semaforo - Master");
-                    }
-                    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                        perror("ERROR - Desmapeando la shared memory - Master");
-                    }
-                    if(shm_unlink(SHM_NAME)==-1){
-                        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-                    }
-                    if(close(shared_memory_fd) == -1){
-                        perror("ERROR - Cerrando el fd de la shared memory - Master");
-                    }
-                    for(int j = 0; j < SLAVES; j++){
-                        if(close(read_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de lectura - Master");
-                        }
-                        if(close(write_fd[j]) == -1){
-                            perror("ERROR - Al cerrar un fd de escritura - Master");
-                        }
-                    }
+                    close_fd(read_fd, SLAVES);
+                    close_fd(write_fd, SLAVES);
+                    close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
                     /// ------------------------------------------------------------
                     exit(1);
                 }
@@ -1013,32 +999,35 @@ int main(int arg_c, char** arg_v){
     if(shm_write(final_str, &shm ) == -1){
         perror("ERROR - Al enviar el fin de transmision a la shm - Master");
         /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_close(read_sem)==-1){
-            perror("ERROR - Cerrando el semaforo - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
-        if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-            perror("ERROR - Desmapeando la shared memory - Master");
-        }
-        if(shm_unlink(SHM_NAME)==-1){
-            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
-        for(int j = 0; j < SLAVES; j++){
-            if(close(read_fd[j]) == -1){
-                perror("ERROR - Al cerrar un fd de lectura - Master");
-            }
-            if(close(write_fd[j]) == -1){
-                perror("ERROR - Al cerrar un fd de escritura - Master");
-            }
-        }
+        close_fd(read_fd, SLAVES);
+        close_fd(write_fd, SLAVES);
+        close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = 0; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
         /// ------------------------------------------------------------
         exit(1);
     }
@@ -1048,75 +1037,84 @@ int main(int arg_c, char** arg_v){
     //Seria mejor que B ya tenga trabajo
     //Lo de arriba es lo que solucionamos y lo que dejamos de hacer con esta manera
     // Cerramos los pipes para enviar el EOF a los procesos slave y asi finalizan
-    for(int i = 0; i < SLAVES; i++){
-        if(close(read_fd[i]) == -1){
-            perror("ERROR - Al cerrar un fd de lectura - Master");
-            /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
-            for(int j = i+1; j < SLAVES; j++){
-                if(close(read_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de lectura - Master");
-                }
-                if(close(write_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de escritura - Master");
-                }
-            }
-            if(close(write_fd[i]) == -1){
-                perror("ERROR - Al cerrar un fd de escritura - Master");
-            }
-            /// ------------------------------------------------------------
-            exit(1);
-        }
-        if(close(write_fd[i]) == -1){
-            perror("ERROR - Al cerrar un fd de escritura - Master");
-            /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
-            for(int j = i+1; j < SLAVES; j++){
-                if(close(read_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de lectura - Master");
-                }
-                if(close(write_fd[j]) == -1){
-                    perror("ERROR - Al cerrar un fd de escritura - Master");
-                }
-            }
-            /// ------------------------------------------------------------
-            exit(1);
-        }
+    if(close_fd(read_fd, SLAVES) == -1){
+        close_fd(write_fd,SLAVES);
+        close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+        exit(1);
     }
+    if(close_fd(write_fd, SLAVES) == -1){
+        close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+        exit(1);
+    }
+//    for(int i = 0; i < SLAVES; i++){
+//        if(close(read_fd[i]) == -1){
+//            perror("ERROR - Al cerrar un fd de lectura - Master");
+//            /// ------------------------------------------------------------
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = i+1; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
+//            if(close(write_fd[i]) == -1){
+//                perror("ERROR - Al cerrar un fd de escritura - Master");
+//            }
+//            /// ------------------------------------------------------------
+//            exit(1);
+//        }
+//        if(close(write_fd[i]) == -1){
+//            perror("ERROR - Al cerrar un fd de escritura - Master");
+//            /// ------------------------------------------------------------
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
+//            for(int j = i+1; j < SLAVES; j++){
+//                if(close(read_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de lectura - Master");
+//                }
+//                if(close(write_fd[j]) == -1){
+//                    perror("ERROR - Al cerrar un fd de escritura - Master");
+//                }
+//            }
+//            /// ------------------------------------------------------------
+//            exit(1);
+//        }
+//    }
 
     // Esperamos a que se cierren los procesos slave antes de finalizar
     for(int i=0; i<SLAVES; i++){
@@ -1124,48 +1122,50 @@ int main(int arg_c, char** arg_v){
         if(wait(&slave_status) == -1){
             perror("ERROR - Al esperar por un proceso slave - Master");
             /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
+            close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
             /// ------------------------------------------------------------
             exit(1);
         }
         if(WIFEXITED(slave_status) && WEXITSTATUS(slave_status) != 0){
             perror("ERROR - EL proceso slave no se cerro correctamente - Master");
             /// ------------------------------------------------------------
-            if(fclose(resultado_file) == EOF){
-                perror("ERROR - Cerrando el archivo resultado.csv - Master");
-            }
-            if(sem_close(read_sem)==-1){
-                perror("ERROR - Cerrando el semaforo - Master");
-            }
-            if(sem_unlink(READ_SEM)==-1){
-                perror("ERROR - Haciendo unlink del semaforo - Master");
-            }
-            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-                perror("ERROR - Desmapeando la shared memory - Master");
-            }
-            if(shm_unlink(SHM_NAME)==-1){
-                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            }
-            if(close(shared_memory_fd) == -1){
-                perror("ERROR - Cerrando el fd de la shared memory - Master");
-            }
+            close_shm_file_sem(shared_memory_map,shared_memory_fd,SHM_SIZE(arg_c-1),read_sem,resultado_file);
+//            if(fclose(resultado_file) == EOF){
+//                perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//            }
+//            if(sem_close(read_sem)==-1){
+//                perror("ERROR - Cerrando el semaforo - Master");
+//            }
+//            if(sem_unlink(READ_SEM)==-1){
+//                perror("ERROR - Haciendo unlink del semaforo - Master");
+//            }
+//            if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
+//                perror("ERROR - Desmapeando la shared memory - Master");
+//            }
+//            if(shm_unlink(SHM_NAME)==-1){
+//                perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//            }
+//            if(close(shared_memory_fd) == -1){
+//                perror("ERROR - Cerrando el fd de la shared memory - Master");
+//            }
             /// ------------------------------------------------------------
             exit(1);
         }
@@ -1177,21 +1177,23 @@ int main(int arg_c, char** arg_v){
     if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
         perror("ERROR - Desmapeando la shared memory - Master");
         /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_close(read_sem)==-1){
-            perror("ERROR - Cerrando el semaforo - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
-        if(shm_unlink(SHM_NAME)==-1){
-            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
+        close_shm_file_sem(NULL,shared_memory_fd,0,read_sem,resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(sem_close(read_sem)==-1){
+//            perror("ERROR - Cerrando el semaforo - Master");
+//        }
+//        if(sem_unlink(READ_SEM)==-1){
+//            perror("ERROR - Haciendo unlink del semaforo - Master");
+//        }
+//        if(shm_unlink(SHM_NAME)==-1){
+//            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
         /// ------------------------------------------------------------
         exit(1);
     }
@@ -1199,18 +1201,20 @@ int main(int arg_c, char** arg_v){
     if(shm_unlink(SHM_NAME)==-1){
         perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
         /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_close(read_sem)==-1){
-            perror("ERROR - Cerrando el semaforo - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
-        if(close(shared_memory_fd) == -1){
-            perror("ERROR - Cerrando el fd de la shared memory - Master");
-        }
+        close_shm_file_sem(NULL,shared_memory_fd,0,read_sem,resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(sem_close(read_sem)==-1){
+//            perror("ERROR - Cerrando el semaforo - Master");
+//        }
+//        if(sem_unlink(READ_SEM)==-1){
+//            perror("ERROR - Haciendo unlink del semaforo - Master");
+//        }
+//        if(close(shared_memory_fd) == -1){
+//            perror("ERROR - Cerrando el fd de la shared memory - Master");
+//        }
         /// ------------------------------------------------------------
         exit(1);
     }
@@ -1218,15 +1222,17 @@ int main(int arg_c, char** arg_v){
     if(close(shared_memory_fd) == -1){
         perror("ERROR - Cerrando el fd de la shared memory info - Master");
         /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_close(read_sem)==-1){
-            perror("ERROR - Cerrando el semaforo - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
+        close_shm_file_sem(NULL,-1,0,read_sem,resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(sem_close(read_sem)==-1){
+//            perror("ERROR - Cerrando el semaforo - Master");
+//        }
+//        if(sem_unlink(READ_SEM)==-1){
+//            perror("ERROR - Haciendo unlink del semaforo - Master");
+//        }
         /// ------------------------------------------------------------
         exit(1);
     }
@@ -1234,12 +1240,14 @@ int main(int arg_c, char** arg_v){
     if(sem_close(read_sem)==-1){
         perror("ERROR - Cerrando el semaforo - Master");
         /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
-        if(sem_unlink(READ_SEM)==-1){
-            perror("ERROR - Haciendo unlink del semaforo - Master");
-        }
+        close_shm_file_sem(NULL,-1,0,NULL,resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
+//        if(sem_unlink(READ_SEM)==-1){
+//            perror("ERROR - Haciendo unlink del semaforo - Master");
+//        }
         /// ------------------------------------------------------------
         exit(1);
     }
@@ -1247,9 +1255,11 @@ int main(int arg_c, char** arg_v){
     if(sem_unlink(READ_SEM)==-1){
         perror("ERROR - Haciendo unlink del semaforo - Master");
         /// ------------------------------------------------------------
-        if(fclose(resultado_file) == EOF){
-            perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        }
+        close_shm_file_sem(NULL,-1,0,NULL,resultado_file);
+
+//        if(fclose(resultado_file) == EOF){
+//            perror("ERROR - Cerrando el archivo resultado.csv - Master");
+//        }
         /// ------------------------------------------------------------
         exit(1);
     }
@@ -1342,4 +1352,71 @@ int shm_write(const char* str,shm_struct* shm){
         return -1;
     }
     return 0;
+}
+
+// -------------------------------------------------------------------------------------------------------
+// close_shm_file_sem: Libera los recursos utilizados para la shm, el archivo de salida y el semaforo
+// -------------------------------------------------------------------------------------------------------
+// Argumentos:
+//      shm: Puntero al inicio de la shm. Si es NULL, se ignora
+//      shm_fd: File descriptor asociado a la shm. Si es -1, se ignora
+//      shm_length: La longitud de la shm
+//      sem: Puntero al semaforo utilizado para sincronizar el acceso a la shm. Si es NULL, se ignora
+//      file: FILE* utilizado para manejar el archivo de resultado. Si es NULL, se ignora
+// -------------------------------------------------------------------------------------------------------
+// Retorno:
+//      0 si no hubo error, -1 si hubo
+// -------------------------------------------------------------------------------------------------------
+int close_shm_file_sem(void* shm,int shm_fd,int shm_length,sem_t* sem, FILE* file){
+    int error = 0;
+    if(file != NULL && fclose(file) == EOF){
+        perror("ERROR - Cerrando el archivo resultado.csv - Master");
+        error = 1;
+    }
+    if(sem != NULL){
+        if(sem_close(sem)==-1){
+            perror("ERROR - Cerrando el semaforo - Master");
+            error = 1;
+        }
+        if(sem_unlink(READ_SEM)==-1){
+            perror("ERROR - Haciendo unlink del semaforo - Master");
+            error = 1;
+        }
+    }
+    if(shm != NULL){
+        if(munmap(shm, shm_length) == -1){
+            perror("ERROR - Desmapeando la shared memory - Master");
+            error = 1;
+        }
+        if(shm_unlink(SHM_NAME)==-1){
+            perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
+            error = 1;
+        }
+    }
+    if(shm_fd != -1 && close(shm_fd) == -1){
+        perror("ERROR - Cerrando el fd de la shared memory - Master");
+        error = 1;
+    }
+    return error;
+}
+
+// -------------------------------------------------------------------------------------------------------
+// close_pipes: Libera los fd indicados por parametro
+// -------------------------------------------------------------------------------------------------------
+// Argumentos:
+//      fd: Arreglo de fd a cerrar
+//      length: Cantidad de fd
+// -------------------------------------------------------------------------------------------------------
+// Retorno:
+//      0 si no hubo error, -1 si lo hubo
+// -------------------------------------------------------------------------------------------------------
+int close_fd(int * fd, int length){
+    int error = 0;
+    for(int i = 0; i < length; i++){
+        if(close(fd[i]) == -1){
+            perror("ERROR - Cerrando un fd - Master");
+            error = -1;
+        }
+    }
+    return error;
 }

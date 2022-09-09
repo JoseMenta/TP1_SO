@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <semaphore.h>
 #include <stdio.h>
+#include <errno.h>
 struct shmCDT{
     sem_t* semaphore;
     char* start;
@@ -22,15 +23,20 @@ static int writeIndex = 0;
 //      shmStart: Puntero con el inicio al shm
 //      semaphore: Semaforo utilizado para sincronizar a los procesos que utilizan la shm
 // -------------------------------------------------------------------------------------------
-// Retorno: shmADT si no hubo error, NULL si ocurrio algun error al reservar espacio (errno se setea apropiadamente)
+// Retorno: shmADT si no hubo error, NULL si ocurrio algun error al reservar espacio o crear el semaforo (errno se setea apropiadamente)
 // -------------------------------------------------------------------------------------------
 shmADT newShm(char* shmStart, sem_t* semaphore){
     shmADT  ans  = calloc(1,sizeof (struct shmCDT));
     if(ans==NULL){
         return NULL;
     }
+    //Ya que no usamos O_EXCL, uno crea el semaforo y otro solo lo abre
+    sem_t* sem = sem_open(SEM_NAME,O_RDWR|O_CREAT,S_IRWXU,0);
+    if(sem==SEM_FAILED){
+        return NULL;
+    }
     ans->start = shmStart;
-    ans->semaphore = semaphore;
+    ans->semaphore = sem;
     return ans;
 }
 // -------------------------------------------------------------------------------------------------------
@@ -103,15 +109,27 @@ int shm_read(char* buff,int n,shmADT shm){
 //      shm: Estructura con la informacion
 // -------------------------------------------------------------------------------------------------------
 // Retorno:
-//     void
+//     0 si no hubo errores, -1 si hubo algun error (errno se setea apropiadamente)
 // -------------------------------------------------------------------------------------------------------
 // Advertencia:
 //      Deben liberarse los recursos como la shm o el semaforo que se paso en el constructor aparte
 // -------------------------------------------------------------------------------------------------------
-void freeShm(shmADT shm){
+int freeShm(shmADT shm){
     if(shm==NULL){
-        return;
+        return 0;
+    }
+    int ans = 0;
+    if(sem_close(shm->semaphore)==-1){
+       ans = -1;
+    }
+    if(sem_unlink(SEM_NAME)==-1){
+        //En el caso donde se cierra por segunda vez, no consideramos que tenga error
+        if(errno!=ENOENT){
+            ans = -1;
+        }
+        errno = 0;
     }
     free(shm);
+    return ans;
 }
 
