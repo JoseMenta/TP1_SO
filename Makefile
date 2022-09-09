@@ -3,7 +3,7 @@ GCCFLAGS = -Wall -std=c99 -pthread -lrt
 EXEC = md5 slave vista
 
 # Compila, ejecuta en el formato con pipe, muestra los resultados y elimina ejecutables y el archivo csv
-show: compile execute_piped show_results clean
+show: clean tests compile execute_piped show_results
 
 # Comando final segun lo estipulado por la entrega OJO!! FALTA HACER QUE ENTRE A DOCKER DESDE ACA
 all: compile
