@@ -8,6 +8,7 @@ cómputo del md5 de múltiples archivos entre varios procesos.
 
 - Contar con una version de Docker nativa
 - Acceso a una terminal linux
+- Tener instalado el programa _md5sum_ en dicha terminal
 
 ## Instructivo
 Descargar la imagen de docker
