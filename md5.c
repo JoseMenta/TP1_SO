@@ -2,8 +2,8 @@
 // PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include "md5.h"
 
+// Proceso Maestro que recibe los archivos y pide su md5sum, el cual lo guarda en un archivo y lo envia a una shm
 int main(int arg_c, char** arg_v){
-    // Recibe por argumentos los nombres de los archivos. Si no recibe ninguno, finaliza
     if(arg_c <= 1){
         perror("ERROR - No se recibieron archivos - Master");
         exit(1);
@@ -16,9 +16,6 @@ int main(int arg_c, char** arg_v){
 
     // Creamos los slaves y les configuramos los pipes para leer y escribir
     for(int i = 0; i < SLAVES; i++){
-        //Creamos los pipes para comunicarse con los procesos slave
-        // pipe[0]: extremo para leer
-        // pipe[1]: extremo para escribir
         int mtos_pipe[2]; //Va de Master to Slave
         int stom_pipe[2]; //Va de Slave to Master
         if(pipe(mtos_pipe) == -1){
@@ -30,51 +27,41 @@ int main(int arg_c, char** arg_v){
             exit(1);
         }
 
-        // Creamos el proceso hijo Slave
         pid_t new_pid = fork();
         switch (new_pid) {
-            // En caso de error, abortamos
             case -1:
             {
                 perror("ERROR - Creación del proceso Slave - Master");
                 exit(1);
             }
-            // El proceso hijo se convierte en el proceso slave
             case 0:
             {
                 close_fd(read_fd, i);
                 close_fd(write_fd, i);
-                //Cerramos el extremo de escritura del pipe mtos
                 if(close(mtos_pipe[1])== -1){
                     perror("ERROR - Cerrar el extremo de escritura del pipe mtos en Slave - Slave");
                     exit(1);
                 }
-                //Cerramos el extremo de lectura del pipe stom
                 if(close(stom_pipe[0])== -1){
                     perror("ERROR - Cerrar el extremo de lectura del pipe stom en Slave - Slave");
                     exit(1);
                 }
-                // Llevamos a STDIN el extremo de lectura de mtos
                 if(dup2(mtos_pipe[0], STDIN_FILENO)== -1){
                     perror("ERROR - Duplicar STDIN_FILENO en lectura del pipe mtos en Slave - Slave");
                     exit(1);
                 }
-                // Llevamos a STDOUT el extremo de escritura de stom
                 if(dup2(stom_pipe[1], STDOUT_FILENO)== -1){
                     perror("ERROR - Duplicar STDOUT en escritura del pipe stom en Slave - Slave");
                     exit(1);
                 }
-                // Cerramos el extremo de lectura del pipe mtos
                 if(close(mtos_pipe[0])== -1){
                     perror("ERROR - Cerrar el extremo de lectura del pipe mtos en Slave - Slave");
                     exit(1);
                 }
-                // Cerramos el extremo de escritura del pipe stom
                 if(close(stom_pipe[1])== -1){
                     perror("ERROR: Cerrar el extremo de escritura del pipe stom en Slave - Slave");
                     exit(1);
                 }
-                // Ejecutamos el proceso slave
                 if(execl("slave", "./slave", NULL)==-1){
                     perror("ERROR: Al crear el proceso slave - Slave");
                     exit(1);
@@ -84,12 +71,10 @@ int main(int arg_c, char** arg_v){
             // EL proceso padre se queda con los fd requeridos
             default:
             {
-                // Cerramos el extremo de escritura del pipe stom
                 if(close(stom_pipe[1])==-1){
                     perror("ERROR: Cerrar el extremo de escritura del pipe stom en Master - Master");
                     exit(1);
                 }
-                // Cerramos el extremo de lectura del pipe mtos
                 if(close(mtos_pipe[0])==-1){
                     perror("ERROR: Cerrar el extremo de lectura del pipe mtos en Master - Master");
                     exit(1);
@@ -102,14 +87,13 @@ int main(int arg_c, char** arg_v){
     }
 
 
-    // Creamos el archivo. Si falla, abortamos
     FILE * resultado_file;
     if((resultado_file = fopen("./resultado.csv", "w+")) == NULL){
         perror("ERROR - No se pudo abrir archivo resultado - Master");
         exit(1);
     }
 
-    // Creacion de share memory con driver. Si falla la creacion, abortamos
+    // Creacion de share memory con driver
     char * shared_memory = SHM_NAME;
     int shared_memory_fd = shm_open(shared_memory, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
     if(shared_memory_fd == -1){
@@ -118,7 +102,7 @@ int main(int arg_c, char** arg_v){
         exit(1);
     }
 
-    // Asignamos el espacio para la shm. Si falla, abortamos
+    // Asignamos el espacio para la shm
     if(ftruncate(shared_memory_fd, SHM_SIZE(arg_c-1)) == -1){
         perror("ERROR - Falló la asignacion de tamaño en la shared memory - Master");
         close_shm_file_shmADT(NULL, shared_memory_fd, 0, NULL,NULL, resultado_file);
@@ -133,7 +117,7 @@ int main(int arg_c, char** arg_v){
         exit(1);
     }
 
-    //Crea el semaforo para sincronizar la lectura y escritura entre md5 y vista. Si fallo, abortamos
+    // Creamos el semaforo para sincronizar la lectura y escritura entre md5 y vista
     sem_t * shm_sem = sem_open(READ_SEM,O_RDWR|O_CREAT|O_EXCL,S_IRWXU,0);
     if(shm_sem==SEM_FAILED){
         perror("ERROR - Al abrir el semaforo para lectura - Master");
@@ -141,8 +125,7 @@ int main(int arg_c, char** arg_v){
         exit(1);
     }
 
-    // Imprimimos por pantalla el nombre identificador de la shm, el tamaño del mismo y el nombre del semafor
-    // Si falla, abortamos
+    // Imprimimos por pantalla el nombre identificador de la shm, el tamaño del mismo y el nombre del semaforo
     if(printf("%s\n", SHM_NAME) < 0){
         perror("ERROR - Al escribir por pantalla - Master");
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
@@ -160,6 +143,7 @@ int main(int arg_c, char** arg_v){
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
         exit(1);
     }
+
     fflush(stdout);
 
     // Esperamos a que se ejecute el proceso vista
@@ -171,24 +155,20 @@ int main(int arg_c, char** arg_v){
         exit(1);
     }
 
-
-    // Guarda la cantidad de archivos a hashear (si aparece un directorio, es un archivo menos a hashear)
-    int count_arch = arg_c - 1;
-    // Indica la cantidad de archivos ya hasheados
-    int arch_already_hashed = 0;
-    // Indica el proximo archivo a hashear
+    // Indica la cantidad de archivos que faltan hashear
+    int arch_to_hash = arg_c - 1;
+    // Indicamos el proximo archivo a hashear
     int arg_index = 1;
 
     // Le asginamos un archivo a cada slave inicialmente
-    for(int i = 0; i<SLAVES && arg_index<arg_c;i++){
+    for(int i = 0; i<SLAVES && arch_to_hash > 0;i++){
         // Primero hay que comprobar que el path a pasar sea un archivo y queden archivos disponibles para hashear
         int status = 0;
         while(arg_index<arg_c && (status = is_file(arg_v[arg_index])) == 0){
             // Dado que es un directorio, no debe considerarse como archivo
-            count_arch--;
+            arch_to_hash--;
             arg_index++;
         }
-        // Error en lectura de stat
         if(status==-1){
             perror("ERROR - Revisando si el path recibido es un archivo - Master");
             close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
@@ -206,17 +186,18 @@ int main(int arg_c, char** arg_v){
     }
 
     // Iremos enviando el path de los archivos a hashear y leyendo los hasheos
-    while(arch_already_hashed < count_arch){
+    while(arch_to_hash > 0){
         // Configuramos los conjuntos con los elementos de lectura
         fd_set read_fd_set;
         FD_ZERO(&read_fd_set);
-        // Creamos un conjunto de fd para los pipes de escritura
         int max_fd = 0;
-        //Obtenemos el maximo fd, para usar con select
+
         for(int i = 0; i < SLAVES; i++){
+            // Obtenemos el maximo fd, para usar con select
             max_fd = (read_fd[i]>max_fd)?read_fd[i]:max_fd;
             FD_SET(read_fd[i], &read_fd_set);
         }
+
         // Un solo select con sets de lectura para saber cuando se retorna el md5
         // los file descriptors disponibles para leer/escribir
         if(select(max_fd+1, &read_fd_set,  NULL, NULL, NULL) == -1){
@@ -224,7 +205,6 @@ int main(int arg_c, char** arg_v){
             close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
             exit(1);
         }
-        // Repaso todos los fd de lectura para saber cuales se pueden leer (tienen un archivo hasheado)
         for(int i = 0; i<SLAVES ; i++){
             if(FD_ISSET(read_fd[i], &read_fd_set)){
                 // Si esta disponible este fd para leer, leo el hash md5 obtenido
@@ -237,7 +217,7 @@ int main(int arg_c, char** arg_v){
                 }
                 char * arch_hash = NULL;
                 size_t arch_hash_len = 0;
-                // Lectura del fd hasta \n (printf termina en \n)
+
                 if(getline(&arch_hash, &arch_hash_len, read_file) == -1) {
                     perror("ERROR - Al leer del slave - Master");
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
@@ -255,9 +235,8 @@ int main(int arg_c, char** arg_v){
                 while(arg_index<arg_c && (status = is_file(arg_v[arg_index])) == 0){
                     arg_index++;
                     // Dado que es un directorio, no debe considerarse como archivo
-                    count_arch--;
+                    arch_to_hash--;
                 }
-                // Error en lectura de stat
                 if(status==-1){
                     perror("ERROR - Revisando si el path recibido es un archivo - Master");
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm, shm_sem,resultado_file);
@@ -281,7 +260,7 @@ int main(int arg_c, char** arg_v){
                     arg_index++;
                 }
 
-                // Escribo dentro de shm con funcion de driver
+                // Escribimos dentro de shm con funcion de driver
                 if(shm_write(arch_hash, shm ) == -1){
                     perror("ERROR - Al guardar el hash en la shm - Master");
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
@@ -291,7 +270,8 @@ int main(int arg_c, char** arg_v){
                     free(arch_hash);
                     exit(1);
                 }
-                // Imprimo el hasheo del archivo recibido
+
+                // Imprimimos el hasheo del archivo recibido a resultados.csv
                 if(fprintf(resultado_file,"%s", arch_hash) < 0){
                     perror("ERROR - Al escribir el hasheo en resultados.csv - Master");
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
@@ -303,8 +283,7 @@ int main(int arg_c, char** arg_v){
                 }
                 free(arch_hash);
 
-                // Una vez que leimos, movemos el fd del extremo de salida del pipe para poder cerrar el
-                // fd anterior y cerrarlo dado que hicimos fdopen
+                // Una vez que leimos, movemos el fd del extremo de salida del pipe para poder cerrarlo dado que hicimos fdopen
                 read_fd[i] = dup(read_fd[i]);
                 if(read_fd[i] == -1){
                     perror("ERROR - Al mover el fd de lectura - Master");
@@ -319,8 +298,9 @@ int main(int arg_c, char** arg_v){
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
                     exit(1);
                 }
+
                 // Un archivo menos para hashear
-                arch_already_hashed++;
+                arch_to_hash--;
             }
         }
     }
@@ -338,6 +318,7 @@ int main(int arg_c, char** arg_v){
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
         exit(1);
     }
+
     if(close_fd(write_fd, SLAVES) == -1){
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
         exit(1);
@@ -358,6 +339,7 @@ int main(int arg_c, char** arg_v){
         }
     }
 
+    // Liberamos los recursos de la shm y del semaforo
     if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
         perror("ERROR - Desmapeando la shared memory - Master");
         close_shm_file_shmADT(NULL, shared_memory_fd, 0, shm,shm_sem, resultado_file);
@@ -375,7 +357,9 @@ int main(int arg_c, char** arg_v){
         close_shm_file_shmADT(NULL, -1, 0, shm, shm_sem,resultado_file);
         exit(1);
     }
+
     freeShm(shm);
+
     if(sem_close(shm_sem)==-1){
         perror("ERROR - Cerrando el semaforo - Master");
         close_shm_file_shmADT(NULL,-1,0,NULL,NULL,resultado_file);
