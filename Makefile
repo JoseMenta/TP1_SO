@@ -30,9 +30,9 @@ tests:
 
 # Compila los archivos necesarios para funcionar
 compile:
-	@gcc $(GCCFLAGS) md5.c -o md5
+	@gcc $(GCCFLAGS) md5.c shmADT.c -o md5
 	@gcc $(GCCFLAGS) slave.c -o slave
-	@gcc $(GCCFLAGS) vista.c -o vista
+	@gcc $(GCCFLAGS) vista.c shmADT.c -o vista
 
 # Permite ejecutar en el formato con pipe
 # Primero se debe hace make compile y tener un directorio tests con los archivos que se desean analizar

@@ -7,15 +7,35 @@
 #include <stdio.h>
 #include <errno.h>
 struct shmCDT{
-    sem_t* semaphore;
+    int index;
+    sem_t* sem;
     char* start;
 };
-#define SEM_NAME "/read_sem"
-static int readIndex = 0;
-static int writeIndex = 0;
-
+//#define SEM_NAME "/read_sem"
+//static int readIndex = 0;
+//static int writeIndex = 0;
+//sem_t* sem = NULL;
 //TODO: ningun caso de error imprime, eso debe manejarse desde quien llama a las funciones
+//No me sirve hacerlo como variables globales, procesos separados tienen acceso a memorias distintas y por lo tanto a distintas variables globales
 
+// -------------------------------------------------------------------------------------------------------
+// new_sync: Crea el semaforo que se utiliza para sincronizar el acceso a la shm
+// -------------------------------------------------------------------------------------------------------
+// Argumentos:
+//
+// -------------------------------------------------------------------------------------------------------
+// Retorno:
+//      0 si no hubo error, -1 si lo hubo, donde setea errno apropiadamente
+// -------------------------------------------------------------------------------------------------------
+// Advertencia:
+//      Esta funcion solo debe ser llamada por uno de los procesos que van a utilizar el ADT
+// -------------------------------------------------------------------------------------------------------
+//int new_sync(){
+//    sem = sem_open(SEM_NAME,O_RDWR|O_CREAT,S_IRWXU,0);
+//    if(sem==SEM_FAILED){
+//        return -1;
+//    }
+//}
 // -------------------------------------------------------------------------------------------
 // newShm: Crea un nuevo shmADT para manejar al acceso de un shm entre procesos
 // -------------------------------------------------------------------------------------------
@@ -25,18 +45,14 @@ static int writeIndex = 0;
 // -------------------------------------------------------------------------------------------
 // Retorno: shmADT si no hubo error, NULL si ocurrio algun error al reservar espacio o crear el semaforo (errno se setea apropiadamente)
 // -------------------------------------------------------------------------------------------
-shmADT newShm(char* shmStart, sem_t* semaphore){
+shmADT newShm(char* shmStart, sem_t* sem){
     shmADT  ans  = calloc(1,sizeof (struct shmCDT));
     if(ans==NULL){
         return NULL;
     }
-    //Ya que no usamos O_EXCL, uno crea el semaforo y otro solo lo abre
-    sem_t* sem = sem_open(SEM_NAME,O_RDWR|O_CREAT,S_IRWXU,0);
-    if(sem==SEM_FAILED){
-        return NULL;
-    }
     ans->start = shmStart;
-    ans->semaphore = sem;
+    ans->sem = sem;
+    ans->index = 0;
     return ans;
 }
 // -------------------------------------------------------------------------------------------------------
@@ -53,17 +69,18 @@ shmADT newShm(char* shmStart, sem_t* semaphore){
 //      Esta funcion no es concurrente, es decir no puede llamarse desde varios threads. En caso de hacerlo,
 //      el comportamiento es indefinido (por la variable global writeIndex)
 // -------------------------------------------------------------------------------------------------------
+//TODO: cuando cambiemos el caracter de finalizacion, hacer que el primer ciclo termine con '\0'
 int shm_write(const char* str,shmADT shm){
-    for(int i = 0; str[i]!='\n' && str[i]!='\0';i++){
-        shm->start[writeIndex++] = str[i];
+    for(int i = 0; str[i]!='\n' && str[i]!='\0';i++,(shm->index)++){
+        shm->start[shm->index] = str[i];
 //        *((shm->start)++)=str[ii];
-        if(sem_post(shm->semaphore)==-1){
+        if(sem_post(shm->sem)==-1){
 //            perror("ERROR - Al realizar post en el semaforo - Master");
             return -1;
         }
     }
-    *((shm->start)++) = '\n';
-    if(sem_post(shm->semaphore)==-1){
+    shm->start[(shm->index)++] = '\n';
+    if(sem_post(shm->sem)==-1){
 //        perror("ERROR - Al realizar post en el semaforo - Master");
         return -1;
     }
@@ -82,20 +99,21 @@ int shm_write(const char* str,shmADT shm){
 
 int shm_read(char* buff,int n,shmADT shm){
     int status = 0, i=0;
-    for(;(status = sem_wait(shm->semaphore))==0 && shm->start[readIndex]!='\n' && shm->start[readIndex]!='\0' && i<n-2;i++,readIndex++){
-        buff[i] = shm->start[readIndex];
+    for(;(status = sem_wait(shm->sem))==0 && shm->start[shm->index]!='\n' && shm->start[shm->index]!='\0' && shm->start[shm->index]!=EOT && i<n-2;i++,(shm->index)++){
+        buff[i] = shm->start[shm->index];
     }
     if(status==-1){
         return -1;
     }
-    if(shm->start[readIndex]=='\n'){
-        readIndex++;
+    if(shm->start[shm->index]=='\n'){
+        (shm->index)++;
         buff[i] = '\n';
         buff[i+1] = '\0';
         return 0;
         //Aca escribe hasta el index n-1, es decir n caracteres
     }
-    if(shm->start[readIndex]=='\0'){
+    //TODO: cambiar por EOT
+    if(shm->start[shm->index]==EOT){
         buff[i] = '\0';
         return 1;
     }
@@ -109,27 +127,38 @@ int shm_read(char* buff,int n,shmADT shm){
 //      shm: Estructura con la informacion
 // -------------------------------------------------------------------------------------------------------
 // Retorno:
-//     0 si no hubo errores, -1 si hubo algun error (errno se setea apropiadamente)
+//    void
 // -------------------------------------------------------------------------------------------------------
 // Advertencia:
 //      Deben liberarse los recursos como la shm o el semaforo que se paso en el constructor aparte
 // -------------------------------------------------------------------------------------------------------
-int freeShm(shmADT shm){
+void freeShm(shmADT shm){
     if(shm==NULL){
-        return 0;
-    }
-    int ans = 0;
-    if(sem_close(shm->semaphore)==-1){
-       ans = -1;
-    }
-    if(sem_unlink(SEM_NAME)==-1){
-        //En el caso donde se cierra por segunda vez, no consideramos que tenga error
-        if(errno!=ENOENT){
-            ans = -1;
-        }
-        errno = 0;
+        return;
     }
     free(shm);
-    return ans;
 }
+// -------------------------------------------------------------------------------------------------------
+// free_sync: Libera al semaforo que se utiliza para sincronizar el acceso a la shm
+// -------------------------------------------------------------------------------------------------------
+// Argumentos:
+//
+// -------------------------------------------------------------------------------------------------------
+// Retorno:
+//      0 si no hubo error, -1 si lo hubo, donde setea errno apropiadamente
+// -------------------------------------------------------------------------------------------------------
+// Advertencia:
+//      Esta funcion solo debe ser llamada por uno de los procesos que van a utilizar el ADT
+// -------------------------------------------------------------------------------------------------------
+//int free_sync(){
+//    int ans = 0;
+//    if(sem_close(sem)==-1){
+//         ans = -1;
+//    }
+//    if(sem_unlink(SEM_NAME)==-1){
+//        //En el caso donde se cierra por segunda vez, no consideramos que tenga error
+//        ans = -1;
+//    }
+//    return ans;
+//}
 

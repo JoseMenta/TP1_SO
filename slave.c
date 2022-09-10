@@ -1,16 +1,8 @@
-// feature_test_macro para getline
-#define _GNU_SOURCE
+
+#include "slave.h"
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <string.h>
-#include <errno.h>
 
-#define MD5SUM_SIZE 32
 
 //proceso slave que recibe el archivo por stdin y retorna su md5 por stdout
 int main(int arg_c, char ** arg_v){

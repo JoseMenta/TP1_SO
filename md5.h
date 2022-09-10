@@ -1,0 +1,35 @@
+//
+// Created by Jose Menta on 10/09/2022.
+//
+
+#ifndef TP1_SO_MD5_H
+#define TP1_SO_MD5_H
+#define _GNU_SOURCE
+#define _BSD_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <semaphore.h>
+#include "shmADT.h"
+#define SLAVES 5
+#define SHM_NAME "/shm"
+#define READ_SEM "/read_semaphore"
+#define SHM_ELEMENT_SIZE 128
+#define SHM_SIZE(elements) (sizeof(char) * SHM_ELEMENT_SIZE * elements + 1)
+#define SLEEP_TIME 2
+
+int write_to_slave(int fd, const char * file_path);
+int is_file(const char * file_path);
+//int shm_write(const char* str,shm_struct* shm);
+//TODO: creo que no es necesario cerrar el fd, eso se va a cerrar solo cuando termine el proceso
+int close_shm_file_shmADT(void* shm, int shm_fd, int shm_length, shmADT shmAdt,sem_t* sem, FILE* file);
+int close_fd(int * fd, int length);
+#endif //TP1_SO_MD5_H
