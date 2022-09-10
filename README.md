@@ -54,6 +54,33 @@ Colocarlos en el comando _vista_ en el mismo orden de impresion (esto debe reali
 ```
 El resultado se podrá ver en terminal y en resultado.csv una vez finalizado el proceso.
 
+## Testing
+El archivo Makefile cuenta con la posibilidad de realizar pruebas en el código fuente.
+### Valgrind
+Se puede ejecutar la herramienta de testeo Valgrind mediante el comando:
+```sh
+make valgrind
+```
+
+### PVS-Studio
+#### Instalación
+Para poder utilizar el programa depurador PVS-Studio, primero se debe instalar. 
+Para ello, utilizar los comandos
+```sh
+make install_pvs_studio
+make pvs_studio_requisites
+```
+Si el segundo comando make falla, ejecutar los siguientes comandos:
+```sh
+find . -name "*.c" | while read line; do sed -i '1s/^\(.*\)$/\/\/ This is a personal academic project. Dear PVS-Studio, please check it.\n\1/' "$line"; done
+find . -name "*.c" | while read line; do sed -i '2s/^\(.*\)$/\/\/ PVS-Studio Static Code Analyzer for C, C++ and C#: http:\/\/www.viva64.com\n\1/' "$line"; done
+```
+#### Uso
+Se puede ejecutar la herramienta de testeo PVS-Studio mediante el comando:
+```sh
+make pvs_studio
+```
+
 ## Resultados
 El formato de impresion de resultados respeta el formato CSV (comma-separated values)
 

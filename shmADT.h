@@ -1,7 +1,3 @@
-//
-// Created by Jose Menta on 08/09/2022.
-//
-
 #ifndef TP1_SO_SHMADT_H
 #define TP1_SO_SHMADT_H
 #define EOT 0x04

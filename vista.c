@@ -1,8 +1,5 @@
-//
-// Created by Jose Menta on 04/09/2022.
-//
-
-// feature_test_macro para getline
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include "vista.h"
 
 int main(int arg_c, char ** arg_v){

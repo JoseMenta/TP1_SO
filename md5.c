@@ -1,12 +1,6 @@
-
-// feature_test_macro para getline, fdopen y ftruncate
-
-
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include "md5.h"
-
-
-
-
 
 int main(int arg_c, char** arg_v){
     // Recibe por argumentos los nombres de los archivos que se desean procesar
@@ -58,7 +52,6 @@ int main(int arg_c, char** arg_v){
             // El proceso hijo se convierte en el proceso slave
             case 0:
             {
-
                 close_fd(read_fd, i);
                 close_fd(write_fd, i);
                 //Cerramos el extremo de escritura del pipe mtos
@@ -103,6 +96,7 @@ int main(int arg_c, char** arg_v){
                     perror("ERROR: Al crear el proceso slave - Slave");
                     exit(1);
                 }
+                break;
             }
             // EL proceso padre se queda con los fd requeridos
             default:
@@ -142,8 +136,6 @@ int main(int arg_c, char** arg_v){
 //        close_fd(write_fd, SLAVES);
         exit(1);
     }
-
-    //TODO: liberar a resultado_file
 
     // Creacion de share memory con driver
     char * shared_memory = SHM_NAME;
@@ -216,8 +208,15 @@ int main(int arg_c, char** arg_v){
         exit(1);
     }
 
+    // Esperamos a que se ejecute el proceso vista
     sleep(SLEEP_TIME);
-    shmADT shm = newShm((char*) shared_memory_map,shm_sem);
+
+    shmADT shm;
+    if((shm = newShm((char*) shared_memory_map,shm_sem)) == NULL){
+        perror("ERROR - Al crear el ADT - Master");
+        close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
+        exit(1);
+    }
 //    // Definimos la estructura de la shared memory con la informacion necesaria
 //    shm_struct shm;
 //    shm.index = 0;
@@ -265,6 +264,7 @@ int main(int arg_c, char** arg_v){
             arg_index++;
         }
     }
+
     // Iremos enviando el path de los archivos a hashear y leyendo los hasheos
     while(arch_already_hashed < count_arch){
         // Configuramos los conjuntos con los elementos de lectura
@@ -404,6 +404,7 @@ int main(int arg_c, char** arg_v){
             }
         }
     }
+
     char final_str[2] = {EOT, '\n'};
 //    char final_str[2] = {'\0', '\n'};
     if(shm_write(final_str, shm ) == -1){
@@ -494,24 +495,29 @@ int write_to_slave(int fd, const char * file_path){
     strcpy(aux, file_path);
     aux[len] = '\n';
 
-    // Indica la posicion del proximo caracter del path que se debe escribir en el pipe
-    size_t curr = 0;
-    // Indica la cantidad de caracteres que falta escribir por el pipe
-    size_t remaining = len + 1;
-
-    // Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
-    while (remaining > 0) {
-        //Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
-        ssize_t written = write(fd, aux + curr, remaining);
-        if (written == -1) {
-            perror("ERROR - Al intentar escribir el argumento - Master");
-            return -1;
-        }
-        // Movemos el puntero de escritura al primer caracter del path que no se escribio en el pipe
-        curr += written;
-        // Actualizamos la cantidad de caracteres que faltan escribir
-        remaining -= written;
+    if(write(fd, aux, len+1) == -1){
+        perror("ERROR - Al intentar escribir el argumento - Master");
+        return -1;
     }
+
+//    // Indica la posicion del proximo caracter del path que se debe escribir en el pipe
+//    size_t curr = 0;
+//    // Indica la cantidad de caracteres que falta escribir por el pipe
+//    size_t remaining = len + 1;
+//
+//    // Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
+//    while (remaining > 0) {
+//        //Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
+//        ssize_t written = write(fd, aux + curr, remaining);
+//        if (written == -1) {
+//            perror("ERROR - Al intentar escribir el argumento - Master");
+//            return -1;
+//        }
+//        // Movemos el puntero de escritura al primer caracter del path que no se escribio en el pipe
+//        curr += written;
+//        // Actualizamos la cantidad de caracteres que faltan escribir
+//        remaining -= written;
+//    }
     return 0;
 }
 
@@ -534,33 +540,6 @@ int is_file(const char * file_path){
 }
 
 // -------------------------------------------------------------------------------------------------------
-// shm_write: Escribe un string en la shm, sincronizando el semaforo con el padre
-// -------------------------------------------------------------------------------------------------------
-// Argumentos:
-//      str: El string a guardar en la shm
-//      shm: Estructura con la informacion de la shm
-// -------------------------------------------------------------------------------------------------------
-// Retorno:
-//      0 si no hubo error, -1 si lo hubo
-// -------------------------------------------------------------------------------------------------------
-//int shm_write(const char* str,shm_struct* shm){
-//    for(int i = 0; str[i]!='\n';i++){
-////        shm->start[(shm->index)++] = str[i];
-//        *((shm->start)++)=str[i];
-//        if(sem_post(shm->semaphore)==-1){
-//            perror("ERROR - Al realizar post en el semaforo - Master");
-//            return -1;
-//        }
-//    }
-//    *((shm->start)++) = '\n';
-//    if(sem_post(shm->semaphore)==-1){
-//        perror("ERROR - Al realizar post en el semaforo - Master");
-//        return -1;
-//    }
-//    return 0;
-//}
-
-// -------------------------------------------------------------------------------------------------------
 // close_shm_file_shmADT: Libera los recursos utilizados para la shm, el archivo de salida y el semaforo
 // -------------------------------------------------------------------------------------------------------
 // Argumentos:
@@ -571,14 +550,13 @@ int is_file(const char * file_path){
 //      file: FILE* utilizado para manejar el archivo de resultado. Si es NULL, se ignora
 // -------------------------------------------------------------------------------------------------------
 // Retorno:
-//TODO: ver si es 1 o -1 lo que devuelve
 //      0 si no hubo error, -1 si hubo
 // -------------------------------------------------------------------------------------------------------
 int close_shm_file_shmADT(void* shm, int shm_fd, int shm_length, shmADT shmAdt,sem_t* sem, FILE* file){
     int error = 0;
     if(file != NULL && fclose(file) == EOF){
         perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        error = 1;
+        error = -1;
     }
     if(shmAdt != NULL){
         freeShm(shmAdt);
@@ -587,26 +565,26 @@ int close_shm_file_shmADT(void* shm, int shm_fd, int shm_length, shmADT shmAdt,s
     if(sem!=NULL){
         if(sem_close(sem)==-1){
             perror("ERROR - Cerrando el semaforo - Master");
-            error = 1;
+            error = -1;
         }
         if(sem_unlink(READ_SEM)==-1){
             perror("ERROR - Haciendo unlink del semaforo - Master");
-            error = 1;
+            error = -1;
         }
     }
     if(shm != NULL){
         if(munmap(shm, shm_length) == -1){
             perror("ERROR - Desmapeando la shared memory - Master");
-            error = 1;
+            error = -1;
         }
         if(shm_unlink(SHM_NAME)==-1){
             perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-            error = 1;
+            error = -1;
         }
     }
     if(shm_fd != -1 && close(shm_fd) == -1){
         perror("ERROR - Cerrando el fd de la shared memory - Master");
-        error = 1;
+        error = -1;
     }
     return error;
 }

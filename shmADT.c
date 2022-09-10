@@ -1,11 +1,10 @@
-//
-// Created by Jose Menta on 08/09/2022.
-//
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include "shmADT.h"
 #include <stdlib.h>
 #include <semaphore.h>
 #include <stdio.h>
-#include <errno.h>
+
 struct shmCDT{
     int index;
     sem_t* sem;
@@ -36,6 +35,7 @@ struct shmCDT{
 //        return -1;
 //    }
 //}
+
 // -------------------------------------------------------------------------------------------
 // newShm: Crea un nuevo shmADT para manejar al acceso de un shm entre procesos
 // -------------------------------------------------------------------------------------------
@@ -55,6 +55,7 @@ shmADT newShm(char* shmStart, sem_t* sem){
     ans->index = 0;
     return ans;
 }
+
 // -------------------------------------------------------------------------------------------------------
 // shm_write: Escribe un string en la shm, sincronizando el semaforo con el padre
 // -------------------------------------------------------------------------------------------------------
@@ -86,6 +87,7 @@ int shm_write(const char* str,shmADT shm){
     }
     return 0;
 }
+
 // -------------------------------------------------------------------------------------------
 // shm_read: Dado un shmADT y un buffer, almacena la proxima linea guardada en buff
 // -------------------------------------------------------------------------------------------
@@ -96,7 +98,6 @@ int shm_write(const char* str,shmADT shm){
 // -------------------------------------------------------------------------------------------
 // Retorno: 0 si no hubo error, 1 si hubo error (setea errno apropiadamente)
 // -------------------------------------------------------------------------------------------
-
 int shm_read(char* buff,int n,shmADT shm){
     int status = 0, i=0;
     for(;(status = sem_wait(shm->sem))==0 && shm->start[shm->index]!='\n' && shm->start[shm->index]!='\0' && shm->start[shm->index]!=EOT && i<n-2;i++,(shm->index)++){
@@ -119,6 +120,7 @@ int shm_read(char* buff,int n,shmADT shm){
     }
     return 0;
 }
+
 // -------------------------------------------------------------------------------------------------------
 // freeShm: Libera los recursos para almacenar la estructura shm (no libera los recursos auxiliares como
 //          la shm que se paso o el semaforo)

@@ -4,6 +4,7 @@
 
 #ifndef TP1_SO_VISTA_H
 #define TP1_SO_VISTA_H
+
 // feature_test_macro para getline
 #define _GNU_SOURCE
 

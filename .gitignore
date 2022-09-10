@@ -10,3 +10,4 @@ slave
 vista
 *.csv
 *.sh
+.config

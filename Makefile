@@ -11,6 +11,15 @@ all: compile
 #borra los ejecutables, csv anterior y shm, ejecuta en el formato pipe, muestra la salida de vista. Deja lo demas para revisar, mejor borrar al principio por caso de error
 test: clean tests compile execute_piped
 
+# Borra ejecutables y los resultados
+clean: remove_execs remove_results remove_smh_and_semaphore delete
+
+# Realiza el testeo de valgrind
+valgrind: clean tests compile run_valgrind
+
+# Realiza el testeo de PVS Studio
+pvs_studio: clean tests compile run_pvs_studio show_pvs_studio_results remove_pvs_studio_files
+
 # crea un conjunto de archivos para probar
 tests: 
 	@mkdir ./tests
@@ -45,9 +54,6 @@ show_results:
 	@echo "\nEste es el resultado obtenido:\n"
 	@cat ./resultado.csv
 
-# Borra ejecutables y los resultados
-clean: remove_execs remove_results remove_smh_and_semaphore delete
-
 # Borra el archivo CSV
 remove_results:
 	@rm -f resultado.csv
@@ -64,6 +70,31 @@ delete:
 	@rm -rf ./tests
 
 open_docker:
-	docker run -v "${PWD}:/root" --privileged -ti agodio/itba-so:1.0
+	docker run -v "${PWD}:/root" --privileged --rm -ti agodio/itba-so:1.0
 
+run_valgrind:
+	@valgrind ./md5 tests/* | ./vista
 
+install_pvs_studio:
+	@wget -q -O - https://files.pvs-studio.com/etc/pubkey.txt | apt-key add -
+	@wget -O /etc/apt/sources.list.d/viva64.list https://files.pvs-studio.com/etc/viva64.list
+	@apt-get install apt-transport-https
+	@apt-get update
+	@apt-get install pvs-studio
+	@pvs-studio-analyzer credentials "PVS-Studio Free" "FREE-FREE-FREE-FREE"
+
+pvs_studio_requisites:
+	@find . -name "*.c" | while read line; do sed -i '1s/^\(.*\)$/\/\/ This is a personal academic project. Dear PVS-Studio, please check it.\n\1/' "$line"; done
+	@find . -name "*.c" | while read line; do sed -i '2s/^\(.*\)$/\/\/ PVS-Studio Static Code Analyzer for C, C++ and C#: http:\/\/www.viva64.com\n\1/' "$line"; done
+
+run_pvs_studio:
+	@pvs-studio-analyzer trace -- make compile
+	@pvs-studio-analyzer analyze
+	@plog-converter -a '64:1,2,3;GA:1,2,3;OP:1,2,3' -t tasklist -o report.tasks PVS-Studio.log
+
+show_pvs_studio_results:
+	@echo "Errores reportados por PVS Studio:\n"
+	@cat report.tasks
+
+remove_pvs_studio_files:
+	@rm -f PVS-Studio.log report.tasks strace_out

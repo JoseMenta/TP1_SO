@@ -1,10 +1,8 @@
-
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include "slave.h"
 
-
-
-
-//proceso slave que recibe el archivo por stdin y retorna su md5 por stdout
+// Proceso slave que recibe el archivo por stdin y retorna su md5 por stdout
 int main(int arg_c, char ** arg_v){
     //TODO: sacar, es para desarrollo
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -18,11 +16,13 @@ int main(int arg_c, char ** arg_v){
     while((line_length=getline(&line,&len,stdin))>0){
         line[line_length-1] = '\0';
 
-        // Comando para popen
-        char comand[100] = "/usr/bin/md5sum ";
-        strcat(comand, line);
-        //crea el pipe, fork y exec del comando => manejo de errores interno de popen
-        FILE *fp = popen(comand, "r");
+        size_t command_length = strlen(MD5_COMMAND) + line_length;
+        char command[command_length];
+        strcpy(command, MD5_COMMAND);
+        strcat(command, line);
+
+        // Crea el pipe, fork y exec del comando => manejo de errores interno de popen
+        FILE *fp = popen(command, "r");
         if (fp == NULL){
             perror("ERROR - Fallo en popen - Slave");
             free(line);
