@@ -21,6 +21,10 @@ make open_docker
 ```
 Esto abrira un contenedor docker donde correra nuesto proyecto
 
+Ubicarse en la carpeta local del proyecto con
+```sh
+cd root/
+```
 Una vez dentro existen 2 maneras de ejecutar el proyecto
 ### Pipeline
  Ejecutar dentro del contenedor Docker
@@ -52,6 +56,14 @@ Colocarlos en el comando _vista_ en el mismo orden de impresion (esto debe reali
 ```sh
 #A modo de ejemplo
 ./vista /shm 1200 /read_semaphore
+```
+Alternativamente, se puede ingresar dichos parámetros por entrada estándar
+```sh
+#A modo de ejemplo
+./vista
+/shm 
+1200 
+/read_semaphore
 ```
 El resultado se podrá ver en terminal y en resultado.csv una vez finalizado el proceso.
 
@@ -95,6 +107,7 @@ El formato de impresion de resultados respeta el formato CSV (comma-separated va
 ***Path al archvio  ,  MD5  ,  Pid del proceso encargado del calculo***
 
 ***./tests/C.txt,d41d8cd98f00b204e9800998ecf8427e,50
+
 ./tests/A.txt,d41d8cd98f00b204e9800998ecf8427e,48
 (...)***
 
