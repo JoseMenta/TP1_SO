@@ -83,10 +83,6 @@ install_pvs_studio:
 	@apt-get install pvs-studio
 	@pvs-studio-analyzer credentials "PVS-Studio Free" "FREE-FREE-FREE-FREE"
 
-pvs_studio_requisites:
-	@find . -name "*.c" | while read line; do sed -i '1s/^\(.*\)$/\/\/ This is a personal academic project. Dear PVS-Studio, please check it.\n\1/' "$line"; done
-	@find . -name "*.c" | while read line; do sed -i '2s/^\(.*\)$/\/\/ PVS-Studio Static Code Analyzer for C, C++ and C#: http:\/\/www.viva64.com\n\1/' "$line"; done
-
 run_pvs_studio:
 	@pvs-studio-analyzer trace -- make compile
 	@pvs-studio-analyzer analyze

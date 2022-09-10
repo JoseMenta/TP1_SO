@@ -68,13 +68,20 @@ Para poder utilizar el programa depurador PVS-Studio, primero se debe instalar.
 Para ello, utilizar los comandos
 ```sh
 make install_pvs_studio
-make pvs_studio_requisites
 ```
-Si el segundo comando make falla, ejecutar los siguientes comandos:
+
+Luego, para poder utilizar el programa, todos los archivos .c deben tener en sus primeras dos lineas, los siguientes comentarios:
+```sh
+# md5.c [Ejemplo]
+// This is a personal academic project. Dear PVS-Studio, please check it.
+// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
+```
+Una forma de agilizar esta tarea, es utilizando los siguientes comandos:
 ```sh
 find . -name "*.c" | while read line; do sed -i '1s/^\(.*\)$/\/\/ This is a personal academic project. Dear PVS-Studio, please check it.\n\1/' "$line"; done
 find . -name "*.c" | while read line; do sed -i '2s/^\(.*\)$/\/\/ PVS-Studio Static Code Analyzer for C, C++ and C#: http:\/\/www.viva64.com\n\1/' "$line"; done
 ```
+
 #### Uso
 Se puede ejecutar la herramienta de testeo PVS-Studio mediante el comando:
 ```sh
