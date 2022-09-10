@@ -1,6 +1,3 @@
-//
-// Created by Jose Menta on 10/09/2022.
-//
 
 #ifndef TP1_SO_MD5_H
 #define TP1_SO_MD5_H
@@ -27,7 +24,7 @@
 #define READ_SEM "/read_semaphore"
 #define SHM_ELEMENT_SIZE 128
 #define SHM_SIZE(elements) (sizeof(char) * SHM_ELEMENT_SIZE * (elements) + 1)
-#define SLEEP_TIME 15
+#define SLEEP_TIME 10
 
 int write_to_slave(int fd, const char * file_path);
 int is_file(const char * file_path);

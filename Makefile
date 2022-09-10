@@ -64,13 +64,13 @@ remove_execs:
 
 remove_smh_and_semaphore:
 	@rm -f /dev/shm/*
-	
+
 # Borra los test
 delete: 
 	@rm -rf ./tests
 
 open_docker:
-	docker run -v "${PWD}:/root" --privileged --rm -ti agodio/itba-so:1.0
+	@docker run -v "${PWD}:/root" --privileged --rm -ti agodio/itba-so:1.0
 
 run_valgrind:
 	@valgrind ./md5 tests/* | ./vista

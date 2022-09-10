@@ -4,8 +4,7 @@
 
 // Proceso slave que recibe el archivo por stdin y retorna su md5 por stdout
 int main(int arg_c, char ** arg_v){
-    //TODO: sacar, es para desarrollo
-    setvbuf(stdout, NULL, _IONBF, 0);
+
 
     // Leemos de stdin con getline
     size_t len=0;
@@ -66,6 +65,8 @@ int main(int arg_c, char ** arg_v){
             free(line);
             exit(1);
         }
+
+        fflush(stdout);
 
     }
     if(errno != 0){

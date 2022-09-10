@@ -1,6 +1,3 @@
-//
-// Created by Jose Menta on 10/09/2022.
-//
 
 #ifndef TP1_SO_SLAVE_H
 #define TP1_SO_SLAVE_H

@@ -1,6 +1,3 @@
-//
-// Created by Jose Menta on 10/09/2022.
-//
 
 #ifndef TP1_SO_VISTA_H
 #define TP1_SO_VISTA_H
@@ -19,7 +16,7 @@
 #include "shmADT.h"
 #define EOT 0x04
 
-enum {ARGS = 0, STDIN = 1};
 int read_shared_memory_info(shmADT shm);
+void free_data(char ** memory_to_free, int len);
 
 #endif //TP1_SO_VISTA_H

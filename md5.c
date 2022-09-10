@@ -3,8 +3,7 @@
 #include "md5.h"
 
 int main(int arg_c, char** arg_v){
-    // Recibe por argumentos los nombres de los archivos que se desean procesar
-    // Si no recibe ninguno, finaliza
+    // Recibe por argumentos los nombres de los archivos. Si no recibe ninguno, finaliza
     if(arg_c <= 1){
         perror("ERROR - No se recibieron archivos - Master");
         exit(1);
@@ -20,19 +19,14 @@ int main(int arg_c, char** arg_v){
         //Creamos los pipes para comunicarse con los procesos slave
         // pipe[0]: extremo para leer
         // pipe[1]: extremo para escribir
-        int mtos_pipe[2]; //Va de Master a Slave
-        int stom_pipe[2]; //Va de Slave a Master
+        int mtos_pipe[2]; //Va de Master to Slave
+        int stom_pipe[2]; //Va de Slave to Master
         if(pipe(mtos_pipe) == -1){
             perror("ERROR - Al crear el pipe de Master a Slave - Master");
-//            close_fd(read_fd, i);
-//            close_fd(write_fd, i);
             exit(1);
         }
         if(pipe(stom_pipe) == -1){
             perror("ERROR - Al crear el pipe de Slave a Master - Master");
-//            close_fd(read_fd, i);
-//            close_fd(write_fd, i);
-//            close_fd(mtos_pipe, 2);
             exit(1);
         }
 
@@ -43,10 +37,6 @@ int main(int arg_c, char** arg_v){
             case -1:
             {
                 perror("ERROR - Creación del proceso Slave - Master");
-//                close_fd(read_fd, i);
-//                close_fd(write_fd, i);
-//                close_fd(mtos_pipe, 2);
-//                close_fd(stom_pipe, 2);
                 exit(1);
             }
             // El proceso hijo se convierte en el proceso slave
@@ -62,28 +52,21 @@ int main(int arg_c, char** arg_v){
                 //Cerramos el extremo de lectura del pipe stom
                 if(close(stom_pipe[0])== -1){
                     perror("ERROR - Cerrar el extremo de lectura del pipe stom en Slave - Slave");
-//                    close_fd(&(stom_pipe[1]), 1);
-//                    close_fd(mtos_pipe, 1);
                     exit(1);
                 }
                 // Llevamos a STDIN el extremo de lectura de mtos
                 if(dup2(mtos_pipe[0], STDIN_FILENO)== -1){
                     perror("ERROR - Duplicar STDIN_FILENO en lectura del pipe mtos en Slave - Slave");
-//                    close_fd(&(stom_pipe[1]), 1);
-//                    close_fd(mtos_pipe, 1);
                     exit(1);
                 }
                 // Llevamos a STDOUT el extremo de escritura de stom
                 if(dup2(stom_pipe[1], STDOUT_FILENO)== -1){
                     perror("ERROR - Duplicar STDOUT en escritura del pipe stom en Slave - Slave");
-//                    close_fd(&(stom_pipe[1]), 1);
-//                    close_fd(mtos_pipe, 1);
                     exit(1);
                 }
                 // Cerramos el extremo de lectura del pipe mtos
                 if(close(mtos_pipe[0])== -1){
                     perror("ERROR - Cerrar el extremo de lectura del pipe mtos en Slave - Slave");
-//                    close_fd(&(stom_pipe[1]), 1);
                     exit(1);
                 }
                 // Cerramos el extremo de escritura del pipe stom
@@ -104,19 +87,11 @@ int main(int arg_c, char** arg_v){
                 // Cerramos el extremo de escritura del pipe stom
                 if(close(stom_pipe[1])==-1){
                     perror("ERROR: Cerrar el extremo de escritura del pipe stom en Master - Master");
-//                    close_fd(read_fd, i);
-//                    close_fd(write_fd, i);
-//                    close_fd(mtos_pipe, 2);
-//                    close_fd(stom_pipe, 1);
                     exit(1);
                 }
                 // Cerramos el extremo de lectura del pipe mtos
                 if(close(mtos_pipe[0])==-1){
                     perror("ERROR: Cerrar el extremo de lectura del pipe mtos en Master - Master");
-//                    close_fd(read_fd, i);
-//                    close_fd(write_fd, i);
-//                    close_fd(&(mtos_pipe[1]), 1);
-//                    close_fd(stom_pipe, 1);
                     exit(1);
                 }
                 // Almacenamos los pipes de lectura y escritura para el master
@@ -127,57 +102,41 @@ int main(int arg_c, char** arg_v){
     }
 
 
-    // Creamos el archivo
+    // Creamos el archivo. Si falla, abortamos
     FILE * resultado_file;
-    // Si falla, abortamos
     if((resultado_file = fopen("./resultado.csv", "w+")) == NULL){
         perror("ERROR - No se pudo abrir archivo resultado - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         exit(1);
     }
 
-    // Creacion de share memory con driver
+    // Creacion de share memory con driver. Si falla la creacion, abortamos
     char * shared_memory = SHM_NAME;
     int shared_memory_fd = shm_open(shared_memory, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-
-    // Si falla la creacion, abortamos
     if(shared_memory_fd == -1){
         perror("ERROR - Creacion de shm - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(NULL, -1, 0, NULL, NULL,resultado_file);
         exit(1);
     }
 
-    // Asignamos el espacio para la shm
-    // Si falla, abortamos
+    // Asignamos el espacio para la shm. Si falla, abortamos
     if(ftruncate(shared_memory_fd, SHM_SIZE(arg_c-1)) == -1){
         perror("ERROR - Falló la asignacion de tamaño en la shared memory - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(NULL, shared_memory_fd, 0, NULL,NULL, resultado_file);
         exit(1);
     }
 
-    // Mapeamos la shared memory init
-    // Si falla, abortamos
+    // Mapeamos la shared memory init. Si falla, abortamos
     void * shared_memory_map = mmap(NULL, SHM_SIZE(arg_c-1), PROT_WRITE, MAP_SHARED, shared_memory_fd, 0);
     if(shared_memory_map == MAP_FAILED){
         perror("ERROR - Mapeando la shared memory init - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(NULL, shared_memory_fd, 0, NULL,NULL, resultado_file);
         exit(1);
     }
 
-    //Crea el semaforo para sincronizar la lectura y escritura entre md5 y vista
+    //Crea el semaforo para sincronizar la lectura y escritura entre md5 y vista. Si fallo, abortamos
     sem_t * shm_sem = sem_open(READ_SEM,O_RDWR|O_CREAT|O_EXCL,S_IRWXU,0);
-//     Si la creacion fallo, abortamos
     if(shm_sem==SEM_FAILED){
         perror("ERROR - Al abrir el semaforo para lectura - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c-1), NULL,NULL, resultado_file);
         exit(1);
     }
@@ -186,46 +145,31 @@ int main(int arg_c, char** arg_v){
     // Si falla, abortamos
     if(printf("%s\n", SHM_NAME) < 0){
         perror("ERROR - Al escribir por pantalla - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
         exit(1);
     }
 
     if(printf("%lu\n", SHM_SIZE(arg_c-1)) < 0){
         perror("ERROR - Al escribir por pantalla - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
         exit(1);
     }
 
     if(printf("%s\n", READ_SEM) < 0){
         perror("ERROR - Al escribir por pantalla - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
         exit(1);
     }
+    fflush(stdout);
 
     // Esperamos a que se ejecute el proceso vista
     sleep(SLEEP_TIME);
-
     shmADT shm;
     if((shm = newShm((char*) shared_memory_map,shm_sem)) == NULL){
         perror("ERROR - Al crear el ADT - Master");
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
         exit(1);
     }
-//    // Definimos la estructura de la shared memory con la informacion necesaria
-//    shm_struct shm;
-//    shm.index = 0;
-//    shm.semaphore = read_sem;
-//    shm.start = (char*) shared_memory_map;
-
-
-    //TODO: sacar, es para desarrollo
-    setvbuf(stdout, NULL, _IONBF, 0);
 
 
     // Guarda la cantidad de archivos a hashear (si aparece un directorio, es un archivo menos a hashear)
@@ -247,8 +191,6 @@ int main(int arg_c, char** arg_v){
         // Error en lectura de stat
         if(status==-1){
             perror("ERROR - Revisando si el path recibido es un archivo - Master");
-//            close_fd(read_fd, SLAVES);
-//            close_fd(write_fd, SLAVES);
             close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
             exit(1);
         }
@@ -256,8 +198,6 @@ int main(int arg_c, char** arg_v){
         if(arg_index<arg_c) {
             if(write_to_slave(write_fd[i], arg_v[arg_index]) == -1){
                 perror("ERROR - Enviando el path al proceso esclavo");
-//                close_fd(read_fd, SLAVES);
-//                close_fd(write_fd, SLAVES);
                 close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
                 exit(1);
             }
@@ -268,7 +208,7 @@ int main(int arg_c, char** arg_v){
     // Iremos enviando el path de los archivos a hashear y leyendo los hasheos
     while(arch_already_hashed < count_arch){
         // Configuramos los conjuntos con los elementos de lectura
-        fd_set read_fd_set  = {};
+        fd_set read_fd_set;
         FD_ZERO(&read_fd_set);
         // Creamos un conjunto de fd para los pipes de escritura
         int max_fd = 0;
@@ -281,8 +221,6 @@ int main(int arg_c, char** arg_v){
         // los file descriptors disponibles para leer/escribir
         if(select(max_fd+1, &read_fd_set,  NULL, NULL, NULL) == -1){
             perror("ERROR - Al realizar select() - Master");
-//            close_fd(read_fd, SLAVES);
-//            close_fd(write_fd, SLAVES);
             close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
             exit(1);
         }
@@ -294,8 +232,6 @@ int main(int arg_c, char** arg_v){
                 FILE * read_file = fdopen(read_fd[i], "r");
                 if(read_file == NULL){
                     perror("ERROR - Al intentar abrir el fd read - Master");
-//                    close_fd(read_fd, SLAVES);
-//                    close_fd(write_fd, SLAVES);
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
                     exit(1);
                 }
@@ -304,8 +240,6 @@ int main(int arg_c, char** arg_v){
                 // Lectura del fd hasta \n (printf termina en \n)
                 if(getline(&arch_hash, &arch_hash_len, read_file) == -1) {
                     perror("ERROR - Al leer del slave - Master");
-//                    close_fd(read_fd, SLAVES);
-//                    close_fd(write_fd, SLAVES);
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
@@ -326,8 +260,6 @@ int main(int arg_c, char** arg_v){
                 // Error en lectura de stat
                 if(status==-1){
                     perror("ERROR - Revisando si el path recibido es un archivo - Master");
-//                    close_fd(read_fd, SLAVES);
-//                    close_fd(write_fd, SLAVES);
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm, shm_sem,resultado_file);
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
@@ -339,8 +271,6 @@ int main(int arg_c, char** arg_v){
                 if(arg_index<arg_c) {
                     if(write_to_slave(write_fd[i], arg_v[arg_index]) == -1){
                         perror("ERROR - Enviando el path al proceso esclavo");
-//                        close_fd(read_fd, SLAVES);
-//                        close_fd(write_fd, SLAVES);
                         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem,resultado_file);
                         if(fclose(read_file) == EOF){
                             perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
@@ -351,24 +281,9 @@ int main(int arg_c, char** arg_v){
                     arg_index++;
                 }
 
-                // Imprimo el hasheo del archivo recibido
-                //if(printf("%s", arch_hash) < 0){
-                if(fprintf(resultado_file,"%s", arch_hash) < 0){
-                    perror("ERROR - Al escribir el hasheo en resultados.csv - Master");
-//                    close_fd(read_fd, SLAVES);
-//                    close_fd(write_fd, SLAVES);
-                    close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
-                    if(fclose(read_file) == EOF){
-                        perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
-                    }
-                    free(arch_hash);
-                    exit(1);
-                }
                 // Escribo dentro de shm con funcion de driver
                 if(shm_write(arch_hash, shm ) == -1){
                     perror("ERROR - Al guardar el hash en la shm - Master");
-//                    close_fd(read_fd, SLAVES);
-//                    close_fd(write_fd, SLAVES);
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
@@ -376,7 +291,16 @@ int main(int arg_c, char** arg_v){
                     free(arch_hash);
                     exit(1);
                 }
-
+                // Imprimo el hasheo del archivo recibido
+                if(fprintf(resultado_file,"%s", arch_hash) < 0){
+                    perror("ERROR - Al escribir el hasheo en resultados.csv - Master");
+                    close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
+                    if(fclose(read_file) == EOF){
+                        perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
+                    }
+                    free(arch_hash);
+                    exit(1);
+                }
                 free(arch_hash);
 
                 // Una vez que leimos, movemos el fd del extremo de salida del pipe para poder cerrar el
@@ -384,8 +308,6 @@ int main(int arg_c, char** arg_v){
                 read_fd[i] = dup(read_fd[i]);
                 if(read_fd[i] == -1){
                     perror("ERROR - Al mover el fd de lectura - Master");
-//                    close_fd(read_fd, SLAVES);
-//                    close_fd(write_fd, SLAVES);
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
                     if(fclose(read_file) == EOF){
                         perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
@@ -394,8 +316,6 @@ int main(int arg_c, char** arg_v){
                 }
                 if(fclose(read_file) == EOF){
                     perror("ERROR - Cerrando el archivo de lectura del proceso slave - Master");
-//                    close_fd(read_fd, SLAVES);
-//                    close_fd(write_fd, SLAVES);
                     close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
                     exit(1);
                 }
@@ -406,15 +326,12 @@ int main(int arg_c, char** arg_v){
     }
 
     char final_str[2] = {EOT, '\n'};
-//    char final_str[2] = {'\0', '\n'};
     if(shm_write(final_str, shm ) == -1){
         perror("ERROR - Al enviar el fin de transmision a la shm - Master");
-//        close_fd(read_fd, SLAVES);
-//        close_fd(write_fd, SLAVES);
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
         exit(1);
     }
-    //TODO: sin esto, entramos en un deadlock
+
     // Cerramos los pipes para enviar el EOF a los procesos slave y asi finalizan
     if(close_fd(read_fd, SLAVES) == -1){
         close_fd(write_fd,SLAVES);
@@ -499,25 +416,6 @@ int write_to_slave(int fd, const char * file_path){
         perror("ERROR - Al intentar escribir el argumento - Master");
         return -1;
     }
-
-//    // Indica la posicion del proximo caracter del path que se debe escribir en el pipe
-//    size_t curr = 0;
-//    // Indica la cantidad de caracteres que falta escribir por el pipe
-//    size_t remaining = len + 1;
-//
-//    // Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
-//    while (remaining > 0) {
-//        //Quiero que se termine de escribir el mensaje, pudiendo quedarse bloqueado en el caso donde el pipe no tiene espacio suficiente
-//        ssize_t written = write(fd, aux + curr, remaining);
-//        if (written == -1) {
-//            perror("ERROR - Al intentar escribir el argumento - Master");
-//            return -1;
-//        }
-//        // Movemos el puntero de escritura al primer caracter del path que no se escribio en el pipe
-//        curr += written;
-//        // Actualizamos la cantidad de caracteres que faltan escribir
-//        remaining -= written;
-//    }
     return 0;
 }
 
@@ -560,7 +458,6 @@ int close_shm_file_shmADT(void* shm, int shm_fd, int shm_length, shmADT shmAdt,s
     }
     if(shmAdt != NULL){
         freeShm(shmAdt);
-//
     }
     if(sem!=NULL){
         if(sem_close(sem)==-1){
