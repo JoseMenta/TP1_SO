@@ -9,9 +9,8 @@ int main(int arg_c, char ** arg_v){
     // Leemos de stdin con getline
     size_t len=0;
     char* line = NULL;
-
-    // Almacena la cantidad de caracteres leidos
     ssize_t line_length;
+
     while((line_length=getline(&line,&len,stdin))>0){
         line[line_length-1] = '\0';
 
@@ -20,7 +19,7 @@ int main(int arg_c, char ** arg_v){
         strcpy(command, MD5_COMMAND);
         strcat(command, line);
 
-        // Crea el pipe, fork y exec del comando => manejo de errores interno de popen
+        // Crea el pipe, fork y exec del comando => Manejo de errores es interno en popen
         FILE *fp = popen(command, "r");
         if (fp == NULL){
             perror("ERROR - Fallo en popen - Slave");
@@ -29,15 +28,18 @@ int main(int arg_c, char ** arg_v){
         }
 
         //obtenemos el fd del popen
-        int fd_md5sum = fileno(fp);
+        int fd_md5sum;
+        if((fd_md5sum= fileno(fp)) == -1){
+            perror("ERROR - Al obtener el fd de md5sum - Slave");
+            free(line);
+            exit(1);
+        }
 
         char md5_result[MD5SUM_SIZE+1];
         char * md5_result_offset = md5_result;
         size_t count;
         size_t remaining = MD5SUM_SIZE;
-        //remaining>0 porque dice que puede llevar a errores si remaining es 0
         while(remaining > 0 && (count = read(fd_md5sum, md5_result_offset,remaining)) != 0){
-            // Si ocurre un error de lectura, se avisa y aborta
             if(count == -1){
                 perror("ERROR - Al recibir el resultado de md5sum - Slave");
                 free(line);
@@ -53,6 +55,7 @@ int main(int arg_c, char ** arg_v){
 
         // Indicamos el fin de string del hash md5
         md5_result[32] = '\0';
+
         // Cerramos el popen
         if(pclose(fp) == -1){
             perror("ERROR - Al cerrar el extremo de lectura del pipe - Slave");

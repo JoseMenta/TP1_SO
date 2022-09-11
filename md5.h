@@ -1,6 +1,7 @@
 
 #ifndef TP1_SO_MD5_H
 #define TP1_SO_MD5_H
+
 // feature_test_macro para getline, fdopen y ftruncate
 #define _GNU_SOURCE
 #define _BSD_SOURCE

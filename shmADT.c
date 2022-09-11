@@ -76,7 +76,6 @@ int shm_read(char* buff,int n,shmADT shm){
         buff[i] = '\n';
         buff[i+1] = '\0';
         return 0;
-        //Aca escribe hasta el index n-1, es decir n caracteres
     }
     if(shm->start[shm->index]== EOT){
         buff[i] = '\0';

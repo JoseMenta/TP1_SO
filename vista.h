@@ -14,9 +14,10 @@
 #include <string.h>
 #include <semaphore.h>
 #include "shmADT.h"
+
 #define EOT 0x04
 
 int read_shared_memory_info(shmADT shm);
-void free_data(char ** memory_to_free, int len);
+void free_strs(char ** memory_to_free, int len);
 
 #endif //TP1_SO_VISTA_H

@@ -2,18 +2,18 @@
 // PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include "vista.h"
 
+// Proceso Vista que lee la shm e imprime su datos por stdout
 int main(int arg_c, char ** arg_v){
     // FORMATO: /<shared_memory_name>\n
     //          <shared_memory_size>\n
     //          /<sem_name>\n
-    char * shared_memory_name = NULL;
-    char * shared_memory_size = NULL;
-    char * sem_name = NULL;
+    char * shared_memory_name = NULL, * shared_memory_size = NULL, * sem_name = NULL;
     size_t shared_memory_name_len = 0, shared_memory_size_len = 0, sem_name_len = 0;
-
     size_t len;
+
     char * memory_to_free[3];
     int memory_to_free_len=0;
+
     switch (arg_c) {
         // Si no se pasa por argumento, se obtiene por entrada estandar
         case 1: {
@@ -26,7 +26,7 @@ int main(int arg_c, char ** arg_v){
 
             if ((len = getline(&shared_memory_size, &shared_memory_size_len, stdin)) == -1){
                 perror("ERROR - Se esperaba recibir el tamaño de la shared memory - View");
-                free_data(memory_to_free, memory_to_free_len);
+                free_strs(memory_to_free, memory_to_free_len);
                 exit(1);
             }
             shared_memory_size[len-1]='\0';
@@ -34,20 +34,18 @@ int main(int arg_c, char ** arg_v){
             memory_to_free[memory_to_free_len++] = shared_memory_size;
             if ((len = getline(&sem_name, &sem_name_len, stdin)) == -1) {
                 perror("ERROR - Se esperaba recibir el nombre del semaforo - View");
-                free_data(memory_to_free, memory_to_free_len);
+                free_strs(memory_to_free, memory_to_free_len);
                 exit(1);
             }
             sem_name[len-1]='\0';
             memory_to_free[memory_to_free_len++] = sem_name;
             break;
         }
-        // Si se paso por argumento, se toma el primero
         case 4:
             shared_memory_name = arg_v[1];
             shared_memory_size = arg_v[2];
             sem_name = arg_v[3];
             break;
-        // En otro caso, se aborta
         default:
             fprintf(stderr, "ERROR - Solo se espera recibir tres o ningún argumento - View\n");
             exit(1);
@@ -55,19 +53,17 @@ int main(int arg_c, char ** arg_v){
 
     // Se conecta al semaforo con el cual se va a trabajar en la shared memory
     sem_t * shared_memory_sem = sem_open(sem_name, O_RDWR);
-    // Si la conexion falla, abortamos
     if(shared_memory_sem == SEM_FAILED){
         perror("Error - Al abrir el semaforo de la shm - View");
-        free_data(memory_to_free, memory_to_free_len);
+        free_strs(memory_to_free, memory_to_free_len);
         exit(1);
     }
 
     // Nos conectamos a la shared memory creado por el proceso master
     int shared_memory_fd = shm_open(shared_memory_name, O_RDWR, 0);
-    // Si fallo la conexion, abortamos
     if(shared_memory_fd == -1){
         perror("ERROR - Conectando a la shared memory - View");
-        free_data(memory_to_free, memory_to_free_len);
+        free_strs(memory_to_free, memory_to_free_len);
         if(sem_close(shared_memory_sem) == -1){
             perror("ERROR - Cerrando el semaforo - View");
         }
@@ -77,10 +73,9 @@ int main(int arg_c, char ** arg_v){
     // Obtenemos el tamaño de la shm
     char * endptr=NULL;
     size_t shm_size = strtoul(shared_memory_size, &endptr, 10);
-    // Si fallo la conversion, aborta
     if(shared_memory_size == endptr){
         perror("ERROR - Lectura del tamaño de shm por argumento - View");
-        free_data(memory_to_free, memory_to_free_len);
+        free_strs(memory_to_free, memory_to_free_len);
         if(sem_close(shared_memory_sem) == -1){
             perror("ERROR - Cerrando el semaforo - View");
         }
@@ -90,7 +85,7 @@ int main(int arg_c, char ** arg_v){
         exit(1);
     }
 
-    free_data(memory_to_free, memory_to_free_len);
+    free_strs(memory_to_free, memory_to_free_len);
 
     // Mapeamos la shared memory
     void * shared_memory_map = mmap(NULL, shm_size, PROT_READ, MAP_SHARED, shared_memory_fd, 0);
@@ -113,7 +108,7 @@ int main(int arg_c, char ** arg_v){
     }
     int ret_value = read_shared_memory_info(shm);
 
-    // Desmapeamos la shared memory y cerramos su file descriptor. Si falla, abortamos
+    // Desmapeamos la shared memory y cerramos su file descriptor
     freeShm(shm);
     if(munmap(shared_memory_map, shm_size) == -1){
         perror("ERROR - Desmapeando la shared memory - View");
@@ -125,6 +120,7 @@ int main(int arg_c, char ** arg_v){
         }
         ret_value = -1;
     }
+
     if(close(shared_memory_fd) == -1){
         perror("ERROR - Cerrando el fd de la shared memory - View");
         if(sem_close(shared_memory_sem) == -1){
@@ -132,10 +128,12 @@ int main(int arg_c, char ** arg_v){
         }
         ret_value = -1;
     }
+
     if( sem_close(shared_memory_sem) == -1) {
         perror("ERROR - Cerrando el semaforo de la shm - View");
         ret_value = -1;
     }
+
     // Finalizamos la ejecucion del proceso vista. Si hubo algun error, retorna 1; si no, retorna 0
     exit(ret_value * -1);
 }
@@ -166,15 +164,15 @@ int read_shared_memory_info(shmADT shm){
 
 
 // -------------------------------------------------------------------------------------------
-// free_data: Libera la meoria dinamica utilizada para la lectura por STDIN
+// free_strs: Libera la memoria dinamica utilizada para la lectura por STDIN
 // -------------------------------------------------------------------------------------------
 // Argumentos:
-//      memory_to_free: arreglo con punteros a la meoria dinamica
-//      len: cantidad de punteros a liberar
+//      memory_to_free: Arreglo con punteros a la memoria dinamica
+//      len: Cantidad de punteros a liberar
 // -------------------------------------------------------------------------------------------
 // Retorno:
 // -------------------------------------------------------------------------------------------
-void free_data(char ** memory_to_free, int len){
+void free_strs(char ** memory_to_free, int len){
     for(int i=0; i<len; i++){
         free(memory_to_free[i]);
     }
