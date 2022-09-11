@@ -4,8 +4,8 @@
 
 // Proceso slave que recibe el archivo por stdin y retorna su md5 por stdout
 int main(int arg_c, char ** arg_v){
-
-
+    //desactivamos el buffer para stdout
+    setvbuf(stdout,NULL,_IONBF,0);
     // Leemos de stdin con getline
     size_t len=0;
     char* line = NULL;
@@ -53,7 +53,6 @@ int main(int arg_c, char ** arg_v){
 
         // Indicamos el fin de string del hash md5
         md5_result[32] = '\0';
-
         // Cerramos el popen
         if(pclose(fp) == -1){
             perror("ERROR - Al cerrar el extremo de lectura del pipe - Slave");
@@ -65,8 +64,6 @@ int main(int arg_c, char ** arg_v){
             free(line);
             exit(1);
         }
-
-        fflush(stdout);
 
     }
     if(errno != 0){

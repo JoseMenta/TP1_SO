@@ -3,6 +3,8 @@
 #include "md5.h"
 
 int main(int arg_c, char** arg_v){
+    // Desactivamos el buffer para stdout
+    setvbuf(stdout,NULL,_IONBF,0);
     // Recibe por argumentos los nombres de los archivos. Si no recibe ninguno, finaliza
     if(arg_c <= 1){
         perror("ERROR - No se recibieron archivos - Master");
@@ -160,7 +162,6 @@ int main(int arg_c, char** arg_v){
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
         exit(1);
     }
-    fflush(stdout);
 
     // Esperamos a que se ejecute el proceso vista
     sleep(SLEEP_TIME);
@@ -170,7 +171,6 @@ int main(int arg_c, char** arg_v){
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), NULL,shm_sem, resultado_file);
         exit(1);
     }
-
 
     // Guarda la cantidad de archivos a hashear (si aparece un directorio, es un archivo menos a hashear)
     int count_arch = arg_c - 1;
@@ -331,7 +331,6 @@ int main(int arg_c, char** arg_v){
         close_shm_file_shmADT(shared_memory_map, shared_memory_fd, SHM_SIZE(arg_c - 1), shm,shm_sem, resultado_file);
         exit(1);
     }
-
     // Cerramos los pipes para enviar el EOF a los procesos slave y asi finalizan
     if(close_fd(read_fd, SLAVES) == -1){
         close_fd(write_fd,SLAVES);
@@ -358,42 +357,10 @@ int main(int arg_c, char** arg_v){
         }
     }
 
-    if(munmap(shared_memory_map, SHM_SIZE(arg_c-1)) == -1){
-        perror("ERROR - Desmapeando la shared memory - Master");
-        close_shm_file_shmADT(NULL, shared_memory_fd, 0, shm,shm_sem, resultado_file);
+    if(close_shm_file_shmADT(shared_memory_map,shared_memory_fd, SHM_SIZE(arg_c-1),shm,shm_sem,resultado_file)==-1){
         exit(1);
     }
-
-    if(shm_unlink(SHM_NAME)==-1){
-        perror("ERROR - Haciendo unlink de la shared memory en md5 - Master");
-        close_shm_file_shmADT(NULL, shared_memory_fd, 0, shm,shm_sem, resultado_file);
-        exit(1);
-    }
-
-    if(close(shared_memory_fd) == -1){
-        perror("ERROR - Cerrando el fd de la shared memory info - Master");
-        close_shm_file_shmADT(NULL, -1, 0, shm, shm_sem,resultado_file);
-        exit(1);
-    }
-    freeShm(shm);
-    if(sem_close(shm_sem)==-1){
-        perror("ERROR - Cerrando el semaforo - Master");
-        close_shm_file_shmADT(NULL,-1,0,NULL,NULL,resultado_file);
-        exit(1);
-    }
-
-    if(sem_unlink(READ_SEM)==-1){
-        perror("ERROR - Haciendo unlink del semaforo - Master");
-        close_shm_file_shmADT(NULL,-1,0,NULL,NULL,resultado_file);
-        exit(1);
-    }
-
-    if(fclose(resultado_file) == EOF){
-        perror("ERROR - Cerrando el archivo resultado.csv - Master");
-        exit(1);
-    }
-
-    exit(0);
+    return 0;
 }
 
 // -------------------------------------------------------------------------------------------------------
