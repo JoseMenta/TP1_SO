@@ -9,7 +9,7 @@ int main(int arg_c, char ** arg_v){
     //          /<sem_name>\n
     char * shared_memory_name = NULL, * shared_memory_size = NULL, * sem_name = NULL;
     size_t shared_memory_name_len = 0, shared_memory_size_len = 0, sem_name_len = 0;
-    size_t len;
+    ssize_t len;
 
     char * memory_to_free[3];
     int memory_to_free_len=0;
@@ -30,8 +30,8 @@ int main(int arg_c, char ** arg_v){
                 exit(1);
             }
             shared_memory_size[len-1]='\0';
-
             memory_to_free[memory_to_free_len++] = shared_memory_size;
+
             if ((len = getline(&sem_name, &sem_name_len, stdin)) == -1) {
                 perror("ERROR - Se esperaba recibir el nombre del semaforo - View");
                 free_strs(memory_to_free, memory_to_free_len);
@@ -74,7 +74,7 @@ int main(int arg_c, char ** arg_v){
     char * endptr=NULL;
     size_t shm_size = strtoul(shared_memory_size, &endptr, 10);
     if(shared_memory_size == endptr){
-        perror("ERROR - Lectura del tamaño de shm por argumento - View");
+        perror("ERROR - Lectura del tamaño de la shm por argumento - View");
         free_strs(memory_to_free, memory_to_free_len);
         if(sem_close(shared_memory_sem) == -1){
             perror("ERROR - Cerrando el semaforo - View");
@@ -102,14 +102,16 @@ int main(int arg_c, char ** arg_v){
 
     // Definimos la estructura de la shared memory con la informacion necesaria
     shmADT shm;
-    if((shm = newShm((char*)shared_memory_map,shared_memory_sem) ) == NULL){
+    if((shm = new_shm((char*)shared_memory_map,shared_memory_sem) ) == NULL){
         perror("ERROR - Al crear el ADT - View");
         exit(1);
     }
+
+    // Leemos de la shared memory e imprimimos por STDOUT
     int ret_value = read_shared_memory_info(shm);
 
     // Desmapeamos la shared memory y cerramos su file descriptor
-    freeShm(shm);
+    free_shm(shm);
     if(munmap(shared_memory_map, shm_size) == -1){
         perror("ERROR - Desmapeando la shared memory - View");
         if(sem_close(shared_memory_sem) == -1){
@@ -130,7 +132,7 @@ int main(int arg_c, char ** arg_v){
     }
 
     if( sem_close(shared_memory_sem) == -1) {
-        perror("ERROR - Cerrando el semaforo de la shm - View");
+        perror("ERROR - Cerrando el semaforo - View");
         ret_value = -1;
     }
 
@@ -140,19 +142,19 @@ int main(int arg_c, char ** arg_v){
 
 // -------------------------------------------------------------------------------------------
 // read_shared_memory_info: Dado un puntero a memoria, lee los datos que se encuentren en la shared memory
-//                          info y los imprime con formato
+//                          y los imprime por STDOUT
 // -------------------------------------------------------------------------------------------
 // Argumentos:
-//      addr: Puntero al inicio de la shared memory info
+//      shm: ADT de la shared memory
 // -------------------------------------------------------------------------------------------
 // Retorno: 0 si no hubo error, -1 si hubo algun error
 // -------------------------------------------------------------------------------------------
 int read_shared_memory_info(shmADT shm){
     // Formato de la shared memory
-    // <arch_1>,<md5_arch_1>,<slave_pid>\n<arch_2>,<md5_arch_2>,<slave_pid>\n...<arch_n>,<md5_arch_n>,<slave_pid>\n\0
-    char shm_output[256];
+    // <arch_1>,<md5_arch_1>,<slave_pid>\n<arch_2>,<md5_arch_2>,<slave_pid>\n...<arch_n>,<md5_arch_n>,<slave_pid>\n\EOT
+    char shm_output[ARCH_INFO_SIZE];
     int status;
-    while((status = shm_read(shm_output,256, shm)) == 0){
+    while((status = shm_read(shm_output,ARCH_INFO_SIZE, shm)) == 0){
         printf("%s", shm_output);
     }
     if(status == -1){
@@ -170,7 +172,7 @@ int read_shared_memory_info(shmADT shm){
 //      memory_to_free: Arreglo con punteros a la memoria dinamica
 //      len: Cantidad de punteros a liberar
 // -------------------------------------------------------------------------------------------
-// Retorno:
+// Retorno: void
 // -------------------------------------------------------------------------------------------
 void free_strs(char ** memory_to_free, int len){
     for(int i=0; i<len; i++){

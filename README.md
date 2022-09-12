@@ -104,7 +104,7 @@ make pvs_studio
 ## Resultados
 El formato de impresion de resultados respeta el formato CSV (comma-separated values)
 
-***Path al archvio  ,  MD5  ,  Pid del proceso encargado del calculo***
+***Path del archivo  , Hash MD5  ,  PID del proceso encargado del calculo***
 
 ***./tests/C.txt,d41d8cd98f00b204e9800998ecf8427e,50
 

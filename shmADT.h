@@ -16,9 +16,9 @@
 
 typedef struct shmCDT* shmADT;
 
-shmADT newShm(char* shmStart, sem_t* sem);
+shmADT new_shm(char* shm_start, sem_t* sem);
 int shm_read(char* buff,int n,shmADT shm);
 int shm_write(const char* str,shmADT shm);
-void freeShm(shmADT shm);
+void free_shm(shmADT shm);
 
 #endif //TP1_SO_SHMADT_H

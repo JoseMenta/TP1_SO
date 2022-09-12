@@ -16,6 +16,7 @@
 #include "shmADT.h"
 
 #define EOT 0x04
+#define ARCH_INFO_SIZE 128
 
 int read_shared_memory_info(shmADT shm);
 void free_strs(char ** memory_to_free, int len);
