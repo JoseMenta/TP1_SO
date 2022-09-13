@@ -13,7 +13,6 @@
 #include <string.h>
 #include <errno.h>
 
-#define MD5SUM_SIZE 32
 #define MD5_COMMAND "/usr/bin/md5sum "
 
 #endif //TP1_SO_SLAVE_H

@@ -37,7 +37,7 @@ shmADT new_shm(char* shm_start, sem_t* sem){
 //      shm: Estructura con la informacion de la shm
 // -------------------------------------------------------------------------------------------------------
 // Retorno:
-//      0 si no hubo error, -1 si lo hubo, donde setea errno apropiadamente
+//      0 si no hubo error, -1 si lo hubo
 // -------------------------------------------------------------------------------------------------------
 int shm_write(const char* str,shmADT shm){
     for(int i = 0; str[i]!='\0';i++,(shm->index)++){
@@ -55,17 +55,17 @@ int shm_write(const char* str,shmADT shm){
 // -------------------------------------------------------------------------------------------
 // Argumentos:
 //      buff: buffer donde se desea guardar la informacion
-//      n: la cantidad maxima de caracteres a escribir en buff (incluyendo \n y/o \0)
+//      len: la cantidad maxima de caracteres a escribir en buff (incluyendo \n y/o \0)
 //      shm: Estructura de la shared memory
 // -------------------------------------------------------------------------------------------
-// Retorno: 0 si no hubo error, 1 si finalizo la lectura y -1 si hubo error (setea errno apropiadamente)
+// Retorno: 0 si no hubo error, 1 si finalizo la lectura y -1 si hubo error
 // -------------------------------------------------------------------------------------------
-int shm_read(char* buff,int n,shmADT shm){
+int shm_read(char* buff,int len,shmADT shm){
     if(sem_wait(shm->sem)==-1){
         return -1;
     }
     int i=0;
-    for(;shm->start[shm->index]!='\0' && shm->start[shm->index]!=EOT && i<n-1;i++,(shm->index)++){
+    for(;shm->start[shm->index]!='\0' && shm->start[shm->index]!=EOT && i<len-1; i++,(shm->index)++){
         buff[i] = shm->start[shm->index];
     }
     if(shm->start[shm->index]== EOT){
@@ -79,7 +79,7 @@ int shm_read(char* buff,int n,shmADT shm){
 
 // -------------------------------------------------------------------------------------------------------
 // free_shm: Libera los recursos para almacenar la estructura shm (no libera los recursos auxiliares como
-//          la shm que se paso o el semaforo)
+//           la shm que se paso o el semaforo)
 // -------------------------------------------------------------------------------------------------------
 // Argumentos:
 //      shm: Estructura con la informacion

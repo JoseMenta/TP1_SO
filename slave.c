@@ -20,7 +20,7 @@ int main(int arg_c, char ** arg_v){
         strcpy(command, MD5_COMMAND);
         strcat(command, line);
 
-        // Crea el pipe, fork y exec del comando => el manejo de errores es interno en popen
+        // Crea el pipe, fork y exec del comando
         FILE *fp = popen(command, "r");
         if (fp == NULL){
             perror("ERROR - Al usar popen - Slave");
@@ -44,28 +44,29 @@ int main(int arg_c, char ** arg_v){
         // Indicamos el fin de string del hash md5
         md5_result[md5_result_len-1] = '\0';
 
-        // Cerramos el popen
         if(pclose(fp) == -1){
             perror("ERROR - Al cerrar el extremo de lectura del pipe - Slave");
             free(md5_result);
             free(line);
             exit(1);
         }
+
+        // Enviamos la respuesta por STDOUT
         if(printf("%s,%s,%d\n",line,md5_result,getpid()) < 0){
-            perror("ERROR - Fallo printf() - Slave");
+            perror("ERROR - Al realizar printf() - Slave");
             free(md5_result);
             free(line);
             exit(1);
         }
         free(md5_result);
     }
-    // Se libera el string que obtiene el path del archivo
-    free(line);
 
     if(errno != 0){
         perror("ERROR - Leyendo el path del archivo - Slave");
+        free(line);
         exit(1);
     }
+    free(line);
     exit(0);
 }
 

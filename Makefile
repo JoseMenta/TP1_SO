@@ -2,16 +2,16 @@ GCCFLAGS = -Wall -std=c99 -pthread -lrt
 
 EXEC = md5 slave vista
 
-# Compila, ejecuta en el formato con pipe, muestra los resultados y elimina ejecutables y el archivo csv
+# Compila, ejecuta en el formato con pipe, muestra los resultados
 show: clean tests compile execute_piped show_results
 
-# Comando final segun lo estipulado por la entrega OJO!! FALTA HACER QUE ENTRE A DOCKER DESDE ACA
+# Comando final segun lo estipulado por la entrega
 all: compile
 
-#borra los ejecutables, csv anterior y shm, ejecuta en el formato pipe, muestra la salida de vista. Deja lo demas para revisar, mejor borrar al principio por caso de error
+# Borra los ejecutables, csv anterior y shm, ejecuta en el formato pipe, muestra la salida de vista y deja el resultado para revisión
 test: clean tests compile execute_piped
 
-# Borra ejecutables y los resultados
+# Borra ejecutables, resultados y shm
 clean: remove_execs remove_results remove_smh_and_semaphore delete
 
 # Realiza el testeo de valgrind
@@ -20,7 +20,7 @@ valgrind: clean tests compile run_valgrind
 # Realiza el testeo de PVS Studio
 pvs_studio: clean tests compile run_pvs_studio show_pvs_studio_results remove_pvs_studio_files
 
-# crea un conjunto de archivos para probar
+# Crea un conjunto de archivos para probar
 tests: 
 	@mkdir ./tests
 	@touch ./tests/A.txt

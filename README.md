@@ -7,7 +7,7 @@ cómputo del md5 de múltiples archivos entre varios procesos.
 ## Requerimientos previos
 
 - Contar con una version de Docker nativa
-- Acceso a una terminal linux
+- Acceso a una terminal Linux
 - Tener instalado el programa _md5sum_ en dicha terminal
 
 ## Instructivo
@@ -21,13 +21,13 @@ make open_docker
 ```
 Esto abrira un contenedor docker donde correra nuesto proyecto
 
-Ubicarse en la carpeta local del proyecto con
+Ubicarse en la carpeta local del proyecto con:
 ```sh
 cd root/
 ```
-Una vez dentro existen 2 maneras de ejecutar el proyecto
-### Pipeline
- Ejecutar dentro del contenedor Docker
+Una vez dentro existen 2 maneras de ejecutar el proyecto.
+### 1. Pipeline
+ Ejecutar dentro del contenedor Docker:
 ```sh
 $ make all
 #Ejemplo:   ./md5  ./prueba/*  | ./vista
@@ -39,7 +39,7 @@ El resultado se podrá ver en terminal y en resultado.csv una vez finalizado el 
 
 
 
-### Procesos en simultaneo
+### 2. Procesos en simultáneo
 
 Ejecutar dentro del contenedor Docker
 ```sh
@@ -51,8 +51,8 @@ make all
 /read_semaphore
 ```
 
-Este comando arrojara 3 valores.
-Colocarlos en el comando _vista_ en el mismo orden de impresion (esto debe realizarse dentro de los 15 segundos luego de ejecutar a _md5_)
+Este comando arrojará 3 valores.
+Colocarlos en el comando _vista_ en el mismo orden de impresión (esto debe realizarse dentro de los 2 segundos luego de ejecutar a _md5_)
 ```sh
 #A modo de ejemplo
 ./vista /shm 1200 /read_semaphore
@@ -78,12 +78,12 @@ make valgrind
 ### PVS-Studio
 #### Instalación
 Para poder utilizar el programa depurador PVS-Studio, primero se debe instalar. 
-Para ello, utilizar los comandos
+Para ello, utilizar el comando:
 ```sh
 make install_pvs_studio
 ```
 
-Luego, para poder utilizar el programa, todos los archivos .c deben tener en sus primeras dos lineas, los siguientes comentarios:
+Luego, para poder utilizar el programa, todos los archivos .c deben tener en sus primeras dos lineas los siguientes comentarios:
 ```sh
 # md5.c [Ejemplo]
 // This is a personal academic project. Dear PVS-Studio, please check it.
@@ -106,10 +106,11 @@ El formato de impresion de resultados respeta el formato CSV (comma-separated va
 
 ***Path del archivo  , Hash MD5  ,  PID del proceso encargado del calculo***
 
-***./tests/C.txt,d41d8cd98f00b204e9800998ecf8427e,50
+***./tests/C.txt,d41d8cd98f00b204e9800998ecf8427e,50***
 
-./tests/A.txt,d41d8cd98f00b204e9800998ecf8427e,48
-(...)***
+***./tests/A.txt,d41d8cd98f00b204e9800998ecf8427e,48***
+
+***(...)***
 
 
 ### Links de Interes

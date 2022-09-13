@@ -41,11 +41,13 @@ int main(int arg_c, char ** arg_v){
             memory_to_free[memory_to_free_len++] = sem_name;
             break;
         }
+        // Se reciben los datos como argumentos
         case 4:
             shared_memory_name = arg_v[1];
             shared_memory_size = arg_v[2];
             sem_name = arg_v[3];
             break;
+        // No se pasaron la cantidad de argumentos correcta
         default:
             fprintf(stderr, "ERROR - Solo se espera recibir tres o ningún argumento - View\n");
             exit(1);
@@ -70,7 +72,7 @@ int main(int arg_c, char ** arg_v){
         exit(1);
     }
 
-    // Obtenemos el tamaño de la shm
+    // Obtenemos el tamaño de la shared memory
     char * endptr=NULL;
     size_t shm_size = strtoul(shared_memory_size, &endptr, 10);
     if(shared_memory_size == endptr){
@@ -136,13 +138,12 @@ int main(int arg_c, char ** arg_v){
         ret_value = -1;
     }
 
-    // Finalizamos la ejecucion del proceso vista. Si hubo algun error, retorna 1; si no, retorna 0
     exit(ret_value * -1);
 }
 
 // -------------------------------------------------------------------------------------------
 // read_shared_memory: Dado un puntero a memoria, lee los datos que se encuentren en la shared memory
-//                          y los imprime por STDOUT
+//                     y los imprime por STDOUT
 // -------------------------------------------------------------------------------------------
 // Argumentos:
 //      shm: ADT de la shared memory
