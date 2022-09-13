@@ -108,7 +108,7 @@ int main(int arg_c, char ** arg_v){
     }
 
     // Leemos de la shared memory e imprimimos por STDOUT
-    int ret_value = read_shared_memory_info(shm);
+    int ret_value = read_shared_memory(shm);
 
     // Desmapeamos la shared memory y cerramos su file descriptor
     free_shm(shm);
@@ -141,7 +141,7 @@ int main(int arg_c, char ** arg_v){
 }
 
 // -------------------------------------------------------------------------------------------
-// read_shared_memory_info: Dado un puntero a memoria, lee los datos que se encuentren en la shared memory
+// read_shared_memory: Dado un puntero a memoria, lee los datos que se encuentren en la shared memory
 //                          y los imprime por STDOUT
 // -------------------------------------------------------------------------------------------
 // Argumentos:
@@ -149,7 +149,7 @@ int main(int arg_c, char ** arg_v){
 // -------------------------------------------------------------------------------------------
 // Retorno: 0 si no hubo error, -1 si hubo algun error
 // -------------------------------------------------------------------------------------------
-int read_shared_memory_info(shmADT shm){
+int read_shared_memory(shmADT shm){
     // Formato de la shared memory
     // <arch_1>,<md5_arch_1>,<slave_pid>\n<arch_2>,<md5_arch_2>,<slave_pid>\n...<arch_n>,<md5_arch_n>,<slave_pid>\n\EOT
     char shm_output[ARCH_INFO_SIZE];

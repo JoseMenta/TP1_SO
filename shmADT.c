@@ -48,18 +48,6 @@ int shm_write(const char* str,shmADT shm){
         return -1;
     }
     return 0;
-
-//    for(int i = 0; str[i]!='\n' && str[i]!='\0';i++,(shm->index)++){
-//        shm->start[shm->index] = str[i];
-//        if(sem_post(shm->sem)==-1){
-//            return -1;
-//        }
-//    }
-//    shm->start[(shm->index)++] = '\n';
-//    if(sem_post(shm->sem)==-1){
-//        return -1;
-//    }
-//    return 0;
 }
 
 // -------------------------------------------------------------------------------------------

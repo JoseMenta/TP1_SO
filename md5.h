@@ -30,6 +30,7 @@
 int create_slaves(int * read_fd, int * write_fd, int slaves);
 int close_slaves(int * read_fd, int * write_fd, int slaves);
 int write_to_slave(int fd, const char * file_path);
+int write_shared_memory(int arg_c, char ** arg_v, shmADT shm, int * read_fd, int * write_fd, int slaves, FILE * resultado_file);
 int is_file(const char * file_path);
 int close_shm_file_shmADT(void* shm, int shm_fd, int shm_length, shmADT shmAdt,sem_t* sem, FILE* file);
 int close_fd(int * fd, int length);
